@@ -1,5 +1,7 @@
 # Kayto
 
+[![Crates.io](https://img.shields.io/crates/v/kayto.svg)](https://crates.io/crates/kayto)
+
 Fast OpenAPI v2/v3 Parser & Code Generator
 
 ⚠️ the project is under development
