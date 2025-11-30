@@ -8,16 +8,16 @@ Fast OpenAPI v2/v3 Parser & Code Generator
 
 ## Roadmap
 
-[x] Base specification
-[x] Parser
-  [x] paths
-  [x] methods
-  [x] method parameters
-  [x] method responses
-[ ] Specification for code generation [IN PROGRESS]
-[ ] Code generation
-  [ ] Typescript
-  [ ] Dart
-[ ] Docs
-[ ] Tests
-[ ] CLI
+- [x] Base specification
+- [x] Parser
+  - [x] paths
+  - [x] methods
+  - [x] method parameters
+  - [x] method responses
+- [ ] Specification for code generation [IN PROGRESS]
+- [ ] Code generation
+  - [ ] Typescript
+  - [ ] Dart
+- [ ] Docs
+- [ ] Tests
+- [ ] CLI
