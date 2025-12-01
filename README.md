@@ -6,8 +6,6 @@ Fast OpenAPI v2/v3 Parser & Code Generator
 
 ⚠️ the project is under development
 
-✍️ The goal of the project is to implement a fast parser for generating schemas for different languages (Dart/TypeScript/...)
-
 ## Roadmap
 
 - [x] Base specification
