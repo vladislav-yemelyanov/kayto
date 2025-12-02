@@ -121,7 +121,7 @@ fn try_parse_methods(
                         try_parse_response(&openapi, &method.requestBody, log);
                     });
 
-                    log.response(|log| {
+                    log.responses(|log| {
                         try_parse_responses(&openapi, &method, log);
                     });
                 });

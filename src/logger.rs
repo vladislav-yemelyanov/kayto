@@ -65,11 +65,11 @@ impl Logger {
         self.nested(f);
     }
 
-    pub fn response<F>(&mut self, f: F)
+    pub fn responses<F>(&mut self, f: F)
     where
         F: FnOnce(&mut Self),
     {
-        self.print("🔹 Response:");
+        self.print("🔹 Responses:");
         self.nested(f);
     }
 
