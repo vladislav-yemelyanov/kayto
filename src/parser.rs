@@ -61,6 +61,7 @@ fn try_parse_response(
 
     match &schema.reference {
         Some(reference) => {
+            // TODO: add schema_name to log
             // let schema_name = get_schema_name_by_ref(&reference)?;
 
             let schema = get_schema_by_ref(&openapi, &reference)?;
@@ -118,6 +119,7 @@ fn try_parse_methods(
                     });
 
                     log.body(|log| {
+                        // 🐥 body use response structure
                         try_parse_response(&openapi, &method.requestBody, log);
                     });
 
