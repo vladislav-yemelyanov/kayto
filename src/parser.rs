@@ -24,7 +24,7 @@ fn get_schema_by_ref<'a>(openapi: &'a spec::OpenAPI, reference: &str) -> Option<
     return None;
 }
 
-fn try_parse_schema(schema: &spec::Schema, root: bool, log: &mut logger::Logger) -> Option<String> {
+fn try_parse_schema(schema: &spec::Schema, log: &mut logger::Logger) -> Option<String> {
     let type_name = schema.type_name.as_ref()?;
 
     match type_name {
@@ -33,16 +33,13 @@ fn try_parse_schema(schema: &spec::Schema, root: bool, log: &mut logger::Logger)
                 for (key, value) in properties {
                     let schema = value.as_ref()?;
 
-                    let t = try_parse_schema(&schema, false, log)?;
+                    let t = try_parse_schema(&schema, log)?;
                     log.field(key.as_str(), &t.as_str());
                 }
             }
             return None;
         }
         _ => {
-            if root {
-                // println!("{}", type_name.to_string());
-            }
             return Some(type_name.to_string());
         }
     }
@@ -64,16 +61,13 @@ fn try_parse_response(
 
     match &schema.reference {
         Some(reference) => {
-            let schema_name = get_schema_name_by_ref(&reference)?;
+            // let schema_name = get_schema_name_by_ref(&reference)?;
 
             let schema = get_schema_by_ref(&openapi, &reference)?;
 
-            try_parse_schema(&schema, true, log)?
+            try_parse_schema(&schema, log)?
         }
-        None => {
-            // println!("Response Type:");
-            try_parse_schema(schema, true, log)?
-        }
+        None => try_parse_schema(schema, log)?,
     };
 
     Some(())
@@ -97,7 +91,7 @@ fn try_parse_parameters(method: &spec::Method, log: &mut logger::Logger) -> Opti
     if let Some(params) = &method.parameters {
         for param in params {
             if let Some(schema) = &param.schema {
-                let t = try_parse_schema(schema, true, log);
+                let t = try_parse_schema(schema, log);
                 let name = param.name.as_ref()?;
 
                 log.field(&name, &t?.as_str());
