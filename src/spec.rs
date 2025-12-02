@@ -83,7 +83,7 @@ pub type Paths = Option<HashMap<String, Option<HashMap<MethodVariant, Method>>>>
 #[serde(rename_all = "camelCase")]
 pub struct Components {
     pub schemas: HashMap<String, Option<Schema>>,
-    pub definitions: HashMap<String, Option<Schema>>,
+    pub definitions: Option<HashMap<String, Option<Schema>>>,
 }
 
 #[derive(Deserialize, Debug)]

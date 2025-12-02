@@ -10,11 +10,12 @@ fn get_schema_by_ref<'a>(openapi: &'a spec::OpenAPI, reference: &str) -> Option<
     let components = &openapi.components.as_ref()?;
 
     let schema1 = components.schemas.get(name); // v3
-    let schema2 = components.definitions.get(name); // v2
 
     if let Some(schema1) = schema1 {
         return schema1.as_ref();
     }
+
+    let schema2 = components.definitions.as_ref()?.get(name); // v2
 
     if let Some(schema2) = schema2 {
         return schema2.as_ref();
@@ -23,37 +24,33 @@ fn get_schema_by_ref<'a>(openapi: &'a spec::OpenAPI, reference: &str) -> Option<
     return None;
 }
 
-fn try_parse_schema(schema: &spec::Schema) -> Option<Vec<String>> {
+fn try_parse_schema(schema: &spec::Schema, root: bool) -> Option<()> {
     let type_name = schema.type_name.as_ref()?;
-
-    let mut fields: Vec<String> = vec![];
-
-    fields.push(format!("type: {}", &type_name));
 
     match type_name {
         spec::SchemaType::OBJECT => {
             if let Some(properties) = &schema.properties {
-                for (k, s) in properties {
-                    let schema = s.as_ref()?;
+                for (key, value) in properties {
+                    let schema = value.as_ref()?;
 
-                    fields.push(format!("key: {}", k));
-                    let o_fields = try_parse_schema(&schema);
-
-                    if let Some(mut o_fields) = o_fields {
-                        fields.append(&mut o_fields);
-                    }
+                    println!(
+                        "key: {:?}, value: {:?}",
+                        key,
+                        &schema.type_name.as_ref()?.to_string()
+                    );
+                    try_parse_schema(&schema, false);
                 }
             }
         }
-        spec::SchemaType::STRING => {}
-        spec::SchemaType::NUMBER => {}
-        spec::SchemaType::INTEGER => {}
-        spec::SchemaType::BOOLEAN => {}
-        spec::SchemaType::ARRAY => {}
-        spec::SchemaType::NULL => {}
+        // _ => println!("{}", type_name.to_string()),
+        _ => {
+            if root {
+                println!("{}", type_name.to_string());
+            }
+        }
     }
 
-    Some(fields)
+    Some(())
 }
 
 fn try_parse_response(openapi: &spec::OpenAPI, response: &Option<spec::Response>) -> Option<()> {
@@ -66,20 +63,21 @@ fn try_parse_response(openapi: &spec::OpenAPI, response: &Option<spec::Response>
         .schema
         .as_ref()?;
 
-    let fields = match &schema.reference {
+    match &schema.reference {
         Some(reference) => {
             let schema_name = get_schema_name_by_ref(&reference)?;
-            println!("Reference: {}", &schema_name);
+            println!("Response Reference: {}", &schema_name);
+
             let schema = get_schema_by_ref(&openapi, &reference)?;
 
-            try_parse_schema(&schema)?
+            println!("Reference Schema:");
+            try_parse_schema(&schema, true)?
         }
-        None => try_parse_schema(schema)?,
+        None => {
+            println!("Response Type:");
+            try_parse_schema(schema, true)?
+        }
     };
-
-    for field in fields {
-        println!("{}", field);
-    }
 
     Some(())
 }
@@ -98,7 +96,7 @@ fn try_parse_parameters(method: &spec::Method) {
     if let Some(params) = &method.parameters {
         for param in params {
             if let Some(schema) = &param.schema {
-                try_parse_schema(schema);
+                try_parse_schema(schema, true);
             }
         }
     }
