@@ -12,8 +12,10 @@ Fast OpenAPI v2/v3 Parser & Code Generator
 - [x] Parser
   - [x] paths
   - [x] methods
-  - [x] method parameters
-  - [x] method responses
+  - [x] method: params
+  - [x] method: body
+  - [x] method: responses
+- [x] Logger
 - [ ] Specification for code generation [IN PROGRESS]
 - [ ] Code generation
   - [ ] Typescript
