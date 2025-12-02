@@ -74,6 +74,7 @@ pub struct Response {
 pub struct Method {
     pub operations_id: Option<String>,
     pub parameters: Option<Vec<MethodParams>>,
+    pub requestBody: Option<Response>,
     pub responses: Option<HashMap<String, Option<Response>>>,
 }
 

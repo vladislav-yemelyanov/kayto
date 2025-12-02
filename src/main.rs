@@ -1,3 +1,4 @@
+mod logger;
 mod parser;
 mod spec;
 

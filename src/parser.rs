@@ -1,4 +1,4 @@
-use crate::spec;
+use crate::{logger, spec};
 use std::collections::HashMap;
 
 fn get_schema_name_by_ref(reference: &str) -> Option<&str> {
@@ -24,7 +24,7 @@ fn get_schema_by_ref<'a>(openapi: &'a spec::OpenAPI, reference: &str) -> Option<
     return None;
 }
 
-fn try_parse_schema(schema: &spec::Schema, root: bool) -> Option<()> {
+fn try_parse_schema(schema: &spec::Schema, root: bool, log: &mut logger::Logger) -> Option<String> {
     let type_name = schema.type_name.as_ref()?;
 
     match type_name {
@@ -33,27 +33,26 @@ fn try_parse_schema(schema: &spec::Schema, root: bool) -> Option<()> {
                 for (key, value) in properties {
                     let schema = value.as_ref()?;
 
-                    println!(
-                        "key: {:?}, value: {:?}",
-                        key,
-                        &schema.type_name.as_ref()?.to_string()
-                    );
-                    try_parse_schema(&schema, false);
+                    let t = try_parse_schema(&schema, false, log)?;
+                    log.field(key.as_str(), &t.as_str());
                 }
             }
+            return None;
         }
-        // _ => println!("{}", type_name.to_string()),
         _ => {
             if root {
-                println!("{}", type_name.to_string());
+                // println!("{}", type_name.to_string());
             }
+            return Some(type_name.to_string());
         }
     }
-
-    Some(())
 }
 
-fn try_parse_response(openapi: &spec::OpenAPI, response: &Option<spec::Response>) -> Option<()> {
+fn try_parse_response(
+    openapi: &spec::OpenAPI,
+    response: &Option<spec::Response>,
+    log: &mut logger::Logger,
+) -> Option<()> {
     let schema = &response
         .as_ref()?
         .content
@@ -66,40 +65,47 @@ fn try_parse_response(openapi: &spec::OpenAPI, response: &Option<spec::Response>
     match &schema.reference {
         Some(reference) => {
             let schema_name = get_schema_name_by_ref(&reference)?;
-            println!("Response Reference: {}", &schema_name);
 
             let schema = get_schema_by_ref(&openapi, &reference)?;
 
-            println!("Reference Schema:");
-            try_parse_schema(&schema, true)?
+            try_parse_schema(&schema, true, log)?
         }
         None => {
-            println!("Response Type:");
-            try_parse_schema(schema, true)?
+            // println!("Response Type:");
+            try_parse_schema(schema, true, log)?
         }
     };
 
     Some(())
 }
 
-fn try_parse_responses(openapi: &spec::OpenAPI, method: &spec::Method) {
+fn try_parse_responses(openapi: &spec::OpenAPI, method: &spec::Method, log: &mut logger::Logger) {
     if let Some(responses) = &method.responses {
         for (status_code, response) in responses {
-            println!("Status Code: {}", status_code);
+            let u = status_code.parse::<u16>();
 
-            try_parse_response(&openapi, &response);
+            if let Ok(u) = u {
+                log.status(u, |log| {
+                    try_parse_response(&openapi, &response, log);
+                })
+            }
         }
     }
 }
 
-fn try_parse_parameters(method: &spec::Method) {
+fn try_parse_parameters(method: &spec::Method, log: &mut logger::Logger) -> Option<()> {
     if let Some(params) = &method.parameters {
         for param in params {
             if let Some(schema) = &param.schema {
-                try_parse_schema(schema, true);
+                let t = try_parse_schema(schema, true, log);
+                let name = param.name.as_ref()?;
+
+                log.field(&name, &t?.as_str());
             }
         }
     }
+
+    Some(())
 }
 
 fn try_parse_methods(
@@ -107,18 +113,27 @@ fn try_parse_methods(
     pathname: &str,
     methods: &Option<HashMap<spec::MethodVariant, spec::Method>>,
 ) -> Option<()> {
-    println!("Pathname: {}", pathname);
+    let mut log = logger::Logger::new();
 
-    if let Some(methods) = &methods {
-        for (variant, method) in methods {
-            println!("Variant: {:?}", variant);
+    log.path(pathname, |log| {
+        if let Some(methods) = &methods {
+            for (variant, method) in methods {
+                log.method(&variant.to_string().as_str(), |log| {
+                    log.params(|log| {
+                        try_parse_parameters(&method, log);
+                    });
 
-            try_parse_responses(&openapi, &method);
-            try_parse_parameters(&method);
+                    log.body(|log| {
+                        try_parse_response(&openapi, &method.requestBody, log);
+                    });
 
-            println!("---------------------");
+                    log.response(|log| {
+                        try_parse_responses(&openapi, &method, log);
+                    });
+                });
+            }
         }
-    }
+    });
 
     Some(())
 }
