@@ -133,15 +133,13 @@ impl Parser {
 
             for param in params {
                 if let Some(schema) = &param.schema {
-                    let type_ = self.try_parse_schema(schema, &mut None);
+                    let type_ = self.try_parse_schema(schema, &mut None)?;
 
                     let name = param.name.as_ref()?;
 
-                    let type_unwrapped = type_?;
+                    self.log.field(&name, &type_.as_str());
 
-                    self.log.field(&name, &type_unwrapped.as_str());
-
-                    map_.insert(name.to_string(), type_unwrapped);
+                    map_.insert(name.to_string(), type_);
                 }
             }
 
