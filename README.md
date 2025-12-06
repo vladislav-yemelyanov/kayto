@@ -18,6 +18,9 @@ Fast OpenAPI v2/v3 Parser & Code Generator
       - [x] responses
 - [x] Logger
 - [ ] Specification for code generation [IN PROGRESS]
+  - [x] Base specification
+  - [x] Using the specification
+  - [ ] Creating and filling out reference schemes [IN PROGRESS]
 - [ ] Code generation
   - [ ] Typescript
   - [ ] Dart

@@ -1,3 +1,4 @@
+mod gen_spec;
 mod logger;
 mod parser;
 mod spec;
@@ -24,7 +25,8 @@ async fn main() -> Result<(), Report> {
     let openapi: spec::OpenAPI = serde_json::from_slice(&f)?;
     // println!("{:?}", parsed.paths);
 
-    parser::parse_openapi(&openapi);
+    let mut p = parser::Parser::new(openapi);
+    p.parse();
 
     Ok(())
 }
