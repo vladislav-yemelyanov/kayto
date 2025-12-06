@@ -109,15 +109,15 @@ impl Parser {
                 let u = status_code.parse::<u16>();
 
                 if let Ok(u) = u {
-                    let _ = &self.log.status(u);
+                    self.log.status(u);
 
                     let mut r_schema: Option<gen_spec::Schema> = None;
-                    let _ = &self.try_parse_response(&response, &mut r_schema);
+                    self.try_parse_response(&response, &mut r_schema);
 
                     let mut r = HashMap::new();
 
                     r.insert(u, r_schema);
-                    let _ = r_responses.insert(r);
+                    *r_responses = Some(r);
                 }
             }
         }
@@ -139,7 +139,7 @@ impl Parser {
 
                     let type_unwrapped = type_?;
 
-                    let _ = &self.log.field(&name, &type_unwrapped.as_str());
+                    self.log.field(&name, &type_unwrapped.as_str());
 
                     map_.insert(name.to_string(), type_unwrapped);
                 }
@@ -161,30 +161,30 @@ impl Parser {
     ) -> Option<()> {
         if let Some(methods) = &methods {
             for (variant, method) in methods {
-                let _ = &self.log.method(&variant.to_string());
-                let _ = &self.log.increase_indent();
+                self.log.method(&variant.to_string());
+                self.log.increase_indent();
 
                 let mut params: Option<gen_spec::Schema> = None;
                 let mut body: Option<gen_spec::Schema> = None;
                 let mut responses: Option<HashMap<u16, Option<gen_spec::Schema>>> = None;
 
-                let _ = &self.log.params();
-                let _ = &self.log.increase_indent();
-                let _ = &self.try_parse_parameters(&method, &mut params);
-                let _ = &self.log.decrease_indent();
+                self.log.params();
+                self.log.increase_indent();
+                self.try_parse_parameters(&method, &mut params);
+                self.log.decrease_indent();
 
-                let _ = &self.log.body();
-                let _ = &self.log.increase_indent();
-                let _ = &self.try_parse_response(&method.requestBody, &mut body);
-                let _ = &self.log.decrease_indent();
+                self.log.body();
+                self.log.increase_indent();
+                self.try_parse_response(&method.requestBody, &mut body);
+                self.log.decrease_indent();
 
-                let _ = &self.log.responses();
-                let _ = &self.log.increase_indent();
-                let _ = &self.try_parse_responses(&method, &mut responses);
-                let _ = &self.log.decrease_indent();
+                self.log.responses();
+                self.log.increase_indent();
+                self.try_parse_responses(&method, &mut responses);
+                self.log.decrease_indent();
 
                 // end method
-                let _ = &self.log.decrease_indent();
+                self.log.decrease_indent();
 
                 let req = gen_spec::Request {
                     path: pathname.to_string(),
@@ -194,7 +194,7 @@ impl Parser {
                     responses: responses,
                 };
 
-                let _ = &self.reqs.push(req);
+                self.reqs.push(req);
             }
         }
 
@@ -216,11 +216,11 @@ impl Parser {
 
         if let Some(paths) = paths {
             for (pathname, methods) in paths {
-                let _ = &self.log.path(&pathname);
-                let _ = &self.log.increase_indent();
+                self.log.path(&pathname);
+                self.log.increase_indent();
                 // TODO: add &mut refs
-                let _ = &self.try_parse_methods(&pathname, &methods);
-                let _ = &self.log.decrease_indent();
+                self.try_parse_methods(&pathname, &methods);
+                self.log.decrease_indent();
             }
         }
 
