@@ -148,7 +148,7 @@ impl Parser {
         }
     }
 
-    fn log_schema_type(&mut self, schema_type: &SchemaType, name: Option<&str>) -> Option<()> {
+    fn log_schema_type(&mut self, key: Option<&str>, schema_type: &SchemaType) -> Option<()> {
         match schema_type {
             SchemaType::Primitive(p) => {
                 let v = match p.kind {
@@ -157,19 +157,11 @@ impl Parser {
                     PrimitiveType::String => "string",
                     PrimitiveType::Boolean => "boolean",
                 };
-                self.log.field(name?, v);
+                self.log.field(key?, v);
             }
             SchemaType::Object(map) => {
-                for (k, value) in map {
-                    if let SchemaType::Primitive(p) = value {
-                        let v = match p.kind {
-                            PrimitiveType::Integer => "integer",
-                            PrimitiveType::Number => "number",
-                            PrimitiveType::String => "string",
-                            PrimitiveType::Boolean => "boolean",
-                        };
-                        self.log.field(k.as_str(), v);
-                    }
+                for (k, v) in map {
+                    self.log_schema_type(Some(k), v);
                 }
             }
             _ => {
@@ -192,7 +184,7 @@ impl Parser {
                     let schema_type = self.try_parse_response(&response);
 
                     if let Some(schema_type) = schema_type {
-                        self.log_schema_type(&schema_type, None);
+                        self.log_schema_type(None, &schema_type);
 
                         map.insert(u, schema_type);
                     }
@@ -218,7 +210,7 @@ impl Parser {
                     if let Some(schema_type) = schema_type {
                         let name = param.name.as_ref()?;
 
-                        self.log_schema_type(&schema_type, Some(name.as_str()));
+                        self.log_schema_type(Some(name.as_str()), &schema_type);
 
                         map.insert(name.to_string(), schema_type);
                     }
@@ -251,7 +243,7 @@ impl Parser {
                 let body = self.try_parse_response(&method.request_body);
 
                 if let Some(body) = &body {
-                    self.log_schema_type(&body, None);
+                    self.log_schema_type(None, &body);
                 }
 
                 self.log.decrease_indent();
