@@ -37,6 +37,7 @@ pub struct Schema {
     pub properties: Option<HashMap<String, Option<Schema>>>,
     #[serde(rename = "enum")]
     pub enum_variants: Option<Vec<String>>,
+    pub items: Option<Box<Schema>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -74,7 +75,7 @@ pub struct Response {
 pub struct Method {
     pub operations_id: Option<String>,
     pub parameters: Option<Vec<MethodParams>>,
-    pub requestBody: Option<Response>,
+    pub request_body: Option<Response>,
     pub responses: Option<HashMap<String, Option<Response>>>,
 }
 

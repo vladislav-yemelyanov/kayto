@@ -1,10 +1,43 @@
-use crate::{gen_spec, logger, spec};
+use crate::{logger, spec};
 use std::collections::HashMap;
 
 pub struct Parser {
     openapi: spec::OpenAPI,
     log: logger::Logger,
-    reqs: Vec<gen_spec::Request>,
+    reqs: Vec<Request>,
+    refs: HashMap<String, SchemaType>,
+}
+
+#[derive(Debug, Clone)]
+enum PrimitiveType {
+    String,
+    Integer,
+    Number,
+    Boolean,
+}
+
+#[derive(Debug, Clone)]
+struct Primitive {
+    kind: PrimitiveType,
+    enum_values: Option<Vec<String>>,
+    // TODO: add descripiton, default, nullable, format
+}
+
+#[derive(Debug, Clone)]
+enum SchemaType {
+    Primitive(Primitive),
+    Array(Box<SchemaType>),
+    Object(HashMap<String, SchemaType>),
+    Ref(String),
+}
+
+#[derive(Debug)]
+pub struct Request {
+    pub path: String,
+    pub method: String,
+    pub params: Option<HashMap<String, SchemaType>>,
+    pub body: Option<SchemaType>,
+    pub responses: Option<HashMap<u16, SchemaType>>,
 }
 
 impl Parser {
@@ -31,45 +64,60 @@ impl Parser {
         return None;
     }
 
-    fn try_parse_schema(
-        &mut self,
-        schema: &spec::Schema,
-        req_schema: &mut Option<gen_spec::Schema>,
-    ) -> Option<String> {
-        let type_name = schema.type_name.as_ref()?;
+    fn try_parse_schema(&mut self, schema: &spec::Schema) -> Option<SchemaType> {
+        let type_name = schema.type_name.as_ref();
 
-        match type_name {
-            spec::SchemaType::OBJECT => {
-                if let Some(properties) = &schema.properties {
-                    let mut map_: HashMap<String, String> = HashMap::new();
-                    for (key, value) in properties {
-                        let schema = value.as_ref()?;
+        if let Some(reference) = &schema.reference {
+            let schema_name = self.get_schema_name_by_ref(&reference)?;
+            return Some(SchemaType::Ref(schema_name.to_string()));
+        }
 
-                        let t = self.try_parse_schema(&schema, &mut None)?;
+        match type_name? {
+            spec::SchemaType::ARRAY => {
+                if let Some(items) = &schema.items {
+                    let schema_type = self.try_parse_schema(&items)?;
 
-                        self.log.field(key.as_str(), &t.as_str());
-
-                        map_.insert(key.to_string(), t);
-                    }
-
-                    *req_schema = Some(gen_spec::Schema {
-                        ref_: None,
-                        map_: Some(map_),
-                    });
+                    return Some(SchemaType::Array(Box::new(schema_type)));
                 }
                 return None;
             }
-            _ => {
-                return Some(type_name.to_string());
+            spec::SchemaType::OBJECT => {
+                if let Some(properties) = &schema.properties {
+                    let mut s = HashMap::new();
+
+                    for (key, value) in properties {
+                        let schema = value.as_ref()?;
+
+                        let t = self.try_parse_schema(&schema)?;
+
+                        s.insert(key.to_string(), t);
+                    }
+
+                    return Some(SchemaType::Object(s));
+                }
+                return None;
             }
+            spec::SchemaType::STRING => Some(SchemaType::Primitive(Primitive {
+                kind: PrimitiveType::String,
+                enum_values: None,
+            })),
+            spec::SchemaType::NUMBER => Some(SchemaType::Primitive(Primitive {
+                kind: PrimitiveType::Number,
+                enum_values: None,
+            })),
+            spec::SchemaType::INTEGER => Some(SchemaType::Primitive(Primitive {
+                kind: PrimitiveType::Integer,
+                enum_values: None,
+            })),
+            spec::SchemaType::BOOLEAN => Some(SchemaType::Primitive(Primitive {
+                kind: PrimitiveType::Boolean,
+                enum_values: None,
+            })),
+            _ => None,
         }
     }
 
-    fn try_parse_response(
-        &mut self,
-        response: &Option<spec::Response>,
-        req_schema: &mut Option<gen_spec::Schema>,
-    ) -> Option<()> {
+    fn try_parse_response(&mut self, response: &Option<spec::Response>) -> Option<SchemaType> {
         let schema = &response
             .as_ref()?
             .content
@@ -83,73 +131,104 @@ impl Parser {
             Some(reference) => {
                 // TODO: add schema_name to log
                 let schema_name = self.get_schema_name_by_ref(&reference)?;
-
-                *req_schema = Some(gen_spec::Schema {
-                    ref_: Some(schema_name.to_string()),
-                    map_: None,
-                });
+                self.log.field("ref", schema_name);
 
                 let schema = self.get_schema_by_ref(&reference)?;
 
-                self.try_parse_schema(&schema, &mut None)?
+                let schema_type = self.try_parse_schema(&schema);
+
+                if let Some(schema_type) = &schema_type {
+                    self.refs
+                        .insert(schema_name.to_string(), schema_type.clone());
+                }
+
+                schema_type
             }
-            None => self.try_parse_schema(schema, req_schema)?,
-        };
+            None => self.try_parse_schema(schema),
+        }
+    }
+
+    fn log_schema_type(&mut self, schema_type: &SchemaType, name: Option<&str>) -> Option<()> {
+        match schema_type {
+            SchemaType::Primitive(p) => {
+                let v = match p.kind {
+                    PrimitiveType::Integer => "integer",
+                    PrimitiveType::Number => "number",
+                    PrimitiveType::String => "string",
+                    PrimitiveType::Boolean => "boolean",
+                };
+                self.log.field(name?, v);
+            }
+            SchemaType::Object(map) => {
+                for (k, value) in map {
+                    if let SchemaType::Primitive(p) = value {
+                        let v = match p.kind {
+                            PrimitiveType::Integer => "integer",
+                            PrimitiveType::Number => "number",
+                            PrimitiveType::String => "string",
+                            PrimitiveType::Boolean => "boolean",
+                        };
+                        self.log.field(k.as_str(), v);
+                    }
+                }
+            }
+            _ => {
+                //
+            }
+        }
 
         Some(())
     }
 
-    fn try_parse_responses(
-        &mut self,
-        method: &spec::Method,
-        r_responses: &mut Option<HashMap<u16, Option<gen_spec::Schema>>>,
-    ) {
+    fn try_parse_responses(&mut self, method: &spec::Method) -> Option<HashMap<u16, SchemaType>> {
         if let Some(responses) = &method.responses {
+            let mut map: HashMap<u16, SchemaType> = HashMap::new();
             for (status_code, response) in responses {
                 let u = status_code.parse::<u16>();
 
                 if let Ok(u) = u {
                     self.log.status(u);
 
-                    let mut r_schema: Option<gen_spec::Schema> = None;
-                    self.try_parse_response(&response, &mut r_schema);
+                    let schema_type = self.try_parse_response(&response);
 
-                    let mut r = HashMap::new();
+                    if let Some(schema_type) = schema_type {
+                        self.log_schema_type(&schema_type, None);
 
-                    r.insert(u, r_schema);
-                    *r_responses = Some(r);
+                        map.insert(u, schema_type);
+                    }
                 }
             }
+            return Some(map);
         }
+
+        None
     }
 
     fn try_parse_parameters(
         &mut self,
         method: &spec::Method,
-        req_schema: &mut Option<gen_spec::Schema>,
-    ) -> Option<()> {
+    ) -> Option<HashMap<String, SchemaType>> {
         if let Some(params) = &method.parameters {
-            let mut map_: HashMap<String, String> = HashMap::new();
+            let mut map: HashMap<String, SchemaType> = HashMap::new();
 
             for param in params {
                 if let Some(schema) = &param.schema {
-                    let type_ = self.try_parse_schema(schema, &mut None)?;
+                    let schema_type = self.try_parse_schema(schema);
 
-                    let name = param.name.as_ref()?;
+                    if let Some(schema_type) = schema_type {
+                        let name = param.name.as_ref()?;
 
-                    self.log.field(&name, &type_.as_str());
+                        self.log_schema_type(&schema_type, Some(name.as_str()));
 
-                    map_.insert(name.to_string(), type_);
+                        map.insert(name.to_string(), schema_type);
+                    }
                 }
             }
 
-            *req_schema = Some(gen_spec::Schema {
-                ref_: None,
-                map_: Some(map_),
-            });
+            Some(map);
         }
 
-        Some(())
+        return None;
     }
 
     fn try_parse_methods(
@@ -162,31 +241,32 @@ impl Parser {
                 self.log.method(&variant.to_string());
                 self.log.increase_indent();
 
-                let mut params: Option<gen_spec::Schema> = None;
-                let mut body: Option<gen_spec::Schema> = None;
-                let mut responses: Option<HashMap<u16, Option<gen_spec::Schema>>> = None;
-
                 self.log.params();
                 self.log.increase_indent();
-                self.try_parse_parameters(&method, &mut params);
+                let params = self.try_parse_parameters(&method);
                 self.log.decrease_indent();
 
                 self.log.body();
                 self.log.increase_indent();
-                self.try_parse_response(&method.requestBody, &mut body);
+                let body = self.try_parse_response(&method.request_body);
+
+                if let Some(body) = &body {
+                    self.log_schema_type(&body, None);
+                }
+
                 self.log.decrease_indent();
 
                 self.log.responses();
                 self.log.increase_indent();
-                self.try_parse_responses(&method, &mut responses);
+                let responses = self.try_parse_responses(&method);
                 self.log.decrease_indent();
 
                 // end method
                 self.log.decrease_indent();
 
-                let req = gen_spec::Request {
+                let req = Request {
                     path: pathname.to_string(),
-                    type_: variant.to_string(),
+                    method: variant.to_string(),
                     params: params,
                     body: body,
                     responses: responses,
@@ -206,6 +286,7 @@ impl Parser {
             openapi,
             log,
             reqs: vec![],
+            refs: HashMap::new(),
         }
     }
 
@@ -216,14 +297,17 @@ impl Parser {
             for (pathname, methods) in paths {
                 self.log.path(&pathname);
                 self.log.increase_indent();
-                // TODO: add &mut refs
                 self.try_parse_methods(&pathname, &methods);
                 self.log.decrease_indent();
             }
         }
 
-        for r in &self.reqs {
-            println!("req: {:?}", r);
+        // for r in &self.reqs {
+        //     println!("req: {:?}", r);
+        // }
+
+        for (ref_, name) in &self.refs {
+            println!("ref: {}, schema: {:?}", ref_, name);
         }
     }
 }

@@ -1,4 +1,3 @@
-mod gen_spec;
 mod logger;
 mod parser;
 mod spec;
