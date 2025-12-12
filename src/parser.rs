@@ -1,4 +1,4 @@
-use crate::{logger, spec};
+use crate::{logger, spec, ts_codegen};
 use std::collections::HashMap;
 
 pub struct Parser {
@@ -9,7 +9,7 @@ pub struct Parser {
 }
 
 #[derive(Debug, Clone)]
-enum PrimitiveType {
+pub enum PrimitiveType {
     String,
     Integer,
     Number,
@@ -17,14 +17,14 @@ enum PrimitiveType {
 }
 
 #[derive(Debug, Clone)]
-struct Primitive {
-    kind: PrimitiveType,
-    enum_values: Option<Vec<String>>,
+pub struct Primitive {
+    pub kind: PrimitiveType,
+    pub enum_values: Option<Vec<String>>,
     // TODO: add descripiton, default, nullable, format
 }
 
 #[derive(Debug, Clone)]
-enum SchemaType {
+pub enum SchemaType {
     Primitive(Primitive),
     Array(Box<SchemaType>),
     Object(HashMap<String, SchemaType>),
@@ -292,14 +292,6 @@ impl Parser {
                 self.try_parse_methods(&pathname, &methods);
                 self.log.decrease_indent();
             }
-        }
-
-        // for r in &self.reqs {
-        //     println!("req: {:?}", r);
-        // }
-
-        for (ref_, name) in &self.refs {
-            println!("ref: {}, schema: {:?}", ref_, name);
         }
     }
 }

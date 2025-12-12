@@ -22,7 +22,6 @@ async fn main() -> Result<(), Report> {
     // }
 
     let openapi: spec::OpenAPI = serde_json::from_slice(&f)?;
-    // println!("{:?}", parsed.paths);
 
     let mut p = parser::Parser::new(openapi);
     p.parse();
