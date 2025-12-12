@@ -1,4 +1,4 @@
-use crate::{logger, spec, ts_codegen};
+use crate::{logger, spec};
 use std::collections::HashMap;
 
 pub struct Parser {
