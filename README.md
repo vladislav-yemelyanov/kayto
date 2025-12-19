@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/kayto.svg)](https://crates.io/crates/kayto)
 
-![Demo](https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/kayto.gif?p=1)
+![Demo](https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/kayto.png?p=1)
 
 
 Fast OpenAPI v2/v3 Parser
