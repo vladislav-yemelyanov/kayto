@@ -391,7 +391,7 @@ pub fn parse(openapi: &spec::OpenAPI) -> Result<ParseOutput, String> {
     let mut reqs: Vec<Request> = vec![];
 
     match &openapi.paths {
-        None => Err("Paths is not found".to_string()),
+        None => Err("OpenAPI document has no 'paths' section".to_string()),
         Some(paths) => {
             for (pathname, methods) in paths {
                 let path_reqs = try_parse_path_methods(&openapi, &pathname, &methods, &mut issues);
