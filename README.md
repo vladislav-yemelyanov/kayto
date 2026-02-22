@@ -44,16 +44,14 @@ Important: this is not full OpenAPI v2/v3 compliance yet. It is practical covera
 ## CLI
 
 ```bash
-cargo run -- --input <OPENAPI_URL> [--lang ts|dart] [--output <PATH>]
+cargo run -- --lang <ts|dart> --input <OPENAPI_URL> --output <PATH>
 ```
 
 Arguments:
 
+- `--lang` (required): target generator (`ts` or `dart`).
 - `--input` (required): OpenAPI URL (HTTPS).
-- `--lang` (optional): target generator (`ts` or `dart`).
-- `--output` (optional): output file path. Default: `generated/schema.ts`.
-
-If `--lang` is omitted, CLI still parses and prints diagnostics, but does not generate a file.
+- `--output` (required): output file path.
 
 ## Quick Start
 
@@ -82,15 +80,10 @@ Script arguments:
 ./scripts/generate-dart.sh [output_path] [input_url]
 ```
 
-Defaults:
+Defaults are provided by scripts:
 
-- `output_path`: `generated/schema.ts`
-- `input_url`: GitHub public OpenAPI JSON
-
-For Dart script defaults:
-
-- `output_path`: `generated/schema.dart`
-- `input_url`: GitHub public OpenAPI JSON
+- TS: `generated/schema.ts` + GitHub public OpenAPI JSON
+- Dart: `generated/schema.dart` + GitHub public OpenAPI JSON
 
 ## Generated TypeScript Model
 

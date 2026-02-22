@@ -28,10 +28,10 @@ enum Lang {
 #[command(author, version, about)]
 struct Cli {
     #[arg(short, long, value_enum)]
-    lang: Option<Lang>,
+    lang: Lang,
     #[arg(short, long)]
     input: String,
-    #[arg(short, long, default_value = "generated/schema.ts")]
+    #[arg(short, long)]
     output: PathBuf,
 }
 
@@ -150,22 +150,20 @@ async fn main() -> Result<(), Report> {
     let parsed =
         parser::parse(&openapi).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
-    if let Some(lang) = lang {
-        if let Some(parent) = output.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent)?;
-            }
+    if let Some(parent) = output.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
         }
+    }
 
-        match lang {
-            Lang::Ts => {
-                let generator = generators::ts::TsGenerator;
-                generator.generate(&parsed.requests, &output)?;
-            }
-            Lang::Dart => {
-                let generator = generators::dart::DartGenerator;
-                generator.generate(&parsed.requests, &output)?;
-            }
+    match lang {
+        Lang::Ts => {
+            let generator = generators::ts::TsGenerator;
+            generator.generate(&parsed.requests, &output)?;
+        }
+        Lang::Dart => {
+            let generator = generators::dart::DartGenerator;
+            generator.generate(&parsed.requests, &output)?;
         }
     }
 
@@ -179,20 +177,9 @@ async fn main() -> Result<(), Report> {
 mod tests {
     use super::*;
 
-    /// Verifies CLI accepts required input and uses default output path.
+    /// Verifies CLI parses all required arguments.
     #[test]
-    fn cli_parses_required_input_with_default_output() {
-        let cli = Cli::try_parse_from(["kayto", "--input", "https://example.com/openapi.json"])
-            .expect("cli args should parse");
-
-        assert_eq!(cli.lang, None);
-        assert_eq!(cli.input, "https://example.com/openapi.json");
-        assert_eq!(cli.output, PathBuf::from("generated/schema.ts"));
-    }
-
-    /// Verifies CLI parses optional language and custom output path.
-    #[test]
-    fn cli_parses_lang_and_custom_output() {
+    fn cli_parses_all_required_arguments() {
         let cli = Cli::try_parse_from([
             "kayto",
             "--lang",
@@ -200,18 +187,38 @@ mod tests {
             "--input",
             "https://example.com/openapi.json",
             "--output",
-            "out/schema.ts",
+            "generated/schema.ts",
         ])
         .expect("cli args should parse");
 
-        assert_eq!(cli.lang, Some(Lang::Ts));
-        assert_eq!(cli.output, PathBuf::from("out/schema.ts"));
+        assert_eq!(cli.lang, Lang::Ts);
+        assert_eq!(cli.input, "https://example.com/openapi.json");
+        assert_eq!(cli.output, PathBuf::from("generated/schema.ts"));
     }
 
-    /// Verifies CLI rejects invocation when required input is missing.
+    /// Verifies CLI parses Dart language and custom output path.
     #[test]
-    fn cli_rejects_missing_input() {
-        let err = Cli::try_parse_from(["kayto", "--lang", "dart"]).expect_err("input is required");
+    fn cli_parses_dart_lang_and_custom_output() {
+        let cli = Cli::try_parse_from([
+            "kayto",
+            "--lang",
+            "dart",
+            "--input",
+            "https://example.com/openapi.json",
+            "--output",
+            "out/schema.dart",
+        ])
+        .expect("cli args should parse");
+
+        assert_eq!(cli.lang, Lang::Dart);
+        assert_eq!(cli.output, PathBuf::from("out/schema.dart"));
+    }
+
+    /// Verifies CLI rejects invocation when required arguments are missing.
+    #[test]
+    fn cli_rejects_missing_required_arguments() {
+        let err = Cli::try_parse_from(["kayto", "--lang", "dart"])
+            .expect_err("input and output are required");
         assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
     }
 }
