@@ -1,0 +1,671 @@
+use crate::spec;
+use serde_json::Value;
+use std::collections::BTreeMap;
+
+mod diagnostics;
+mod endpoint_requests;
+mod reference_resolution;
+mod request_parameters;
+mod request_responses;
+mod schema_mapping;
+
+pub use diagnostics::ParseIssue;
+pub(crate) use diagnostics::{issue, issue_with_code, ParseCtx};
+pub(crate) use request_parameters::try_parse_parameters;
+pub(crate) use request_responses::{try_parse_response, try_parse_responses};
+pub(crate) use schema_mapping::try_parse_schema;
+
+/// Primitive scalar categories used inside parser IR.
+#[derive(Debug, Clone)]
+pub enum PrimitiveType {
+    String,
+    Integer,
+    Number,
+    Boolean,
+}
+
+/// Parsed primitive schema metadata.
+#[derive(Debug, Clone)]
+pub struct Primitive {
+    pub kind: PrimitiveType,
+    pub enum_values: Option<Vec<Value>>,
+    pub description: Option<String>,
+    pub default_value: Option<Value>,
+    pub nullable: Option<bool>,
+    pub format: Option<String>,
+}
+
+/// Parsed object schema with deterministic property ordering.
+#[derive(Debug, Clone)]
+pub struct ObjectType {
+    pub properties: BTreeMap<String, SchemaType>,
+    pub required: Option<Vec<String>>,
+}
+
+/// Parsed request parameter ready for codegen backends.
+#[derive(Debug)]
+pub struct ParsedParameter {
+    pub name: String,
+    pub location: Option<String>,
+    pub description: Option<String>,
+    pub required: Option<bool>,
+    pub schema_type: Option<SchemaType>,
+}
+
+/// Language-agnostic type model used as IR for code generation layers.
+#[derive(Debug, Clone)]
+pub enum SchemaType {
+    Primitive(Primitive),
+    Array(Box<SchemaType>),
+    Object(ObjectType),
+    Ref(String),
+    OneOf(Vec<SchemaType>),
+    AnyOf(Vec<SchemaType>),
+    AllOf(Vec<SchemaType>),
+    Unknown,
+}
+
+/// Parsed request/response schema payload with optional named model binding.
+#[derive(Debug)]
+pub struct ParsedResponse {
+    pub schema_type: Option<SchemaType>,
+    pub schema_name: Option<String>,
+}
+
+/// Intermediate representation (IR) for codegen modules (TypeScript, Dart, etc).
+#[derive(Debug)]
+pub struct Request {
+    pub path: String,
+    pub method: String,
+    pub operation_id: Option<String>,
+    pub params: Option<Vec<ParsedParameter>>,
+    pub body: Option<ParsedResponse>,
+    pub responses: Option<BTreeMap<u16, ParsedResponse>>,
+}
+
+/// Top-level parser output with generated IR and diagnostics.
+#[derive(Debug)]
+pub struct ParseOutput {
+    pub requests: Vec<Request>,
+    pub issues: Vec<ParseIssue>,
+}
+
+/// Parses an OpenAPI document into request IR and diagnostics.
+pub fn parse(openapi: &spec::OpenAPI) -> Result<ParseOutput, String> {
+    let mut issues: Vec<ParseIssue> = vec![];
+    let mut reqs: Vec<Request> = vec![];
+
+    match &openapi.paths {
+        None => Err("OpenAPI document has no 'paths' section".to_string()),
+        Some(paths) => {
+            for (pathname, methods) in paths {
+                let path_reqs =
+                    endpoint_requests::parse_requests_for_path(openapi, pathname, methods, &mut issues);
+
+                match path_reqs {
+                    Err(err) => issue(
+                        &mut issues,
+                        "path_methods",
+                        ParseCtx::new(Some(pathname), None, None),
+                        err,
+                    ),
+                    Ok(path_reqs) => reqs.extend(path_reqs),
+                }
+            }
+
+            Ok(ParseOutput {
+                requests: reqs,
+                issues,
+            })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Parses OpenAPI JSON text into parser output for test scenarios.
+    fn parse_json(input: &str) -> ParseOutput {
+        let openapi: spec::OpenAPI = serde_json::from_str(input).expect("valid OpenAPI json");
+        parse(&openapi).expect("parser should return output")
+    }
+
+    /// Ensures parameter `$ref` is resolved into a concrete parsed parameter.
+    #[test]
+    fn resolves_parameter_ref() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/repos": {
+                  "get": {
+                    "parameters": [
+                      { "$ref": "#/components/parameters/org_param" }
+                    ],
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "components": {
+                "parameters": {
+                  "org_param": {
+                    "name": "org",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let params = req.params.as_ref().expect("params must be present");
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name, "org");
+    }
+
+    /// Ensures cyclic parameter `$ref` chains produce a clear diagnostic.
+    #[test]
+    fn reports_cyclic_parameter_ref() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/repos": {
+                  "get": {
+                    "parameters": [
+                      { "$ref": "#/components/parameters/a" }
+                    ],
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "components": {
+                "parameters": {
+                  "a": { "$ref": "#/components/parameters/b" },
+                  "b": { "$ref": "#/components/parameters/a" }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.stage == "parameters.ref" && i.detail.contains("cyclic parameter $ref")));
+    }
+
+    /// Ensures body-less responses are accepted without parser diagnostics.
+    #[test]
+    fn accepts_response_without_content() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/ping": {
+                  "get": {
+                    "responses": {
+                      "204": {}
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r204 = responses.get(&204).expect("204 response");
+        assert!(r204.schema_type.is_none());
+        assert!(r204.schema_name.is_none());
+    }
+
+    /// Ensures empty schema nodes are represented as `SchemaType::Unknown`.
+    #[test]
+    fn maps_empty_schema_to_unknown() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/opaque": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.iter().any(|issue| {
+            issue.code == Some("unknown_schema_missing_type_and_ref")
+                && issue
+                    .detail
+                    .contains("is mapped to 'unknown' because it has neither '$ref' nor explicit 'type'")
+        }));
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        match r200.schema_type.as_ref() {
+            Some(SchemaType::Unknown) => {}
+            other => panic!("expected Unknown schema, got: {:?}", other),
+        }
+    }
+
+    /// Ensures `anyOf` response schemas are parsed into combinator IR variants.
+    #[test]
+    fn parses_any_of_schema() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/union": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": {
+                              "anyOf": [
+                                { "type": "string" },
+                                { "type": "integer" }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        match r200.schema_type.as_ref() {
+            Some(SchemaType::AnyOf(variants)) => assert_eq!(variants.len(), 2),
+            other => panic!("expected AnyOf schema, got: {:?}", other),
+        }
+    }
+
+    /// Ensures `oneOf` response schemas are parsed into combinator IR variants.
+    #[test]
+    fn parses_one_of_schema() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/one-of": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": {
+                              "oneOf": [
+                                { "type": "string" },
+                                { "type": "integer" }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        match r200.schema_type.as_ref() {
+            Some(SchemaType::OneOf(variants)) => assert_eq!(variants.len(), 2),
+            other => panic!("expected OneOf schema, got: {:?}", other),
+        }
+    }
+
+    /// Ensures `allOf` response schemas are parsed into combinator IR variants.
+    #[test]
+    fn parses_all_of_schema() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/all-of": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": {
+                              "allOf": [
+                                { "type": "object", "properties": { "id": { "type": "integer" } } },
+                                { "type": "object", "properties": { "name": { "type": "string" } } }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        match r200.schema_type.as_ref() {
+            Some(SchemaType::AllOf(variants)) => assert_eq!(variants.len(), 2),
+            other => panic!("expected AllOf schema, got: {:?}", other),
+        }
+    }
+
+    /// Ensures nested combinators inside array items are parsed recursively.
+    #[test]
+    fn parses_nested_combinator_in_array_items() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/nested": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": {
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  { "type": "string" },
+                                  { "type": "integer" }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        match r200.schema_type.as_ref() {
+            Some(SchemaType::Array(inner)) => match inner.as_ref() {
+                SchemaType::AnyOf(variants) => assert_eq!(variants.len(), 2),
+                other => panic!("expected nested AnyOf schema, got: {:?}", other),
+            },
+            other => panic!("expected Array schema, got: {:?}", other),
+        }
+    }
+
+    /// Ensures response `$ref` is resolved to named schema and parsed schema type.
+    #[test]
+    fn resolves_response_ref_schema() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/by-ref": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": { "$ref": "#/components/schemas/User" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "components": {
+                "schemas": {
+                  "User": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        assert_eq!(r200.schema_name.as_deref(), Some("User"));
+    }
+
+    /// Ensures missing response `$ref` target is reported as `response.ref` diagnostic.
+    #[test]
+    fn reports_missing_response_ref_schema() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/broken-ref": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": { "$ref": "#/components/schemas/Missing" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "components": {
+                "schemas": {
+                  "User": { "type": "string" }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.stage == "response.ref" && i.detail.contains("schema not found by $ref")));
+    }
+
+    /// Ensures `application/json` media type is preferred over other content types.
+    #[test]
+    fn prefers_application_json_media_type() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/media-priority": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/xml": {
+                            "schema": { "type": "integer" }
+                          },
+                          "application/json": {
+                            "schema": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        match r200.schema_type.as_ref() {
+            Some(SchemaType::Primitive(p)) => match p.kind {
+                PrimitiveType::String => {}
+                _ => panic!("expected string schema from application/json"),
+            },
+            other => panic!("expected primitive schema, got: {:?}", other),
+        }
+    }
+
+    /// Ensures `*+json` media types are preferred when exact `application/json` is absent.
+    #[test]
+    fn prefers_plus_json_media_type_when_json_absent() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/media-plus-json": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/xml": {
+                            "schema": { "type": "integer" }
+                          },
+                          "application/problem+json": {
+                            "schema": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let responses = req.responses.as_ref().expect("responses map");
+        let r200 = responses.get(&200).expect("200 response");
+        match r200.schema_type.as_ref() {
+            Some(SchemaType::Primitive(p)) => match p.kind {
+                PrimitiveType::String => {}
+                _ => panic!("expected string schema from +json media type"),
+            },
+            other => panic!("expected primitive schema, got: {:?}", other),
+        }
+    }
+
+    /// Ensures request body parser falls back to `application/*+json` media types.
+    #[test]
+    fn parses_request_body_from_plus_json_media_type() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/events": {
+                  "post": {
+                    "requestBody": {
+                      "content": {
+                        "application/vnd.api+json": {
+                          "schema": { "type": "string" }
+                        }
+                      }
+                    },
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let body = req.body.as_ref().expect("body should be parsed");
+        assert!(matches!(
+            body.schema_type,
+            Some(SchemaType::Primitive(Primitive {
+                kind: PrimitiveType::String,
+                ..
+            }))
+        ));
+    }
+
+    /// Ensures parameter `$ref` can be resolved from root-level `parameters` section.
+    #[test]
+    fn resolves_root_level_parameter_ref() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/users/{id}": {
+                  "get": {
+                    "parameters": [
+                      { "$ref": "#/parameters/user_id" }
+                    ],
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": {
+                "user_id": {
+                  "name": "id",
+                  "in": "path",
+                  "required": true,
+                  "schema": { "type": "string" }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.is_empty());
+        let req = parsed.requests.first().expect("one request");
+        let params = req.params.as_ref().expect("params should be parsed");
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name, "id");
+        assert_eq!(params[0].location.as_deref(), Some("path"));
+    }
+}

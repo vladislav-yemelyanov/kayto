@@ -2,95 +2,180 @@
 
 [![Crates.io](https://img.shields.io/crates/v/kayto.svg)](https://crates.io/crates/kayto)
 
-Fast OpenAPI parser that turns imperfect specs into a stable output schema with actionable diagnostics.
+Fast OpenAPI parser and schema generator that turns imperfect specs into stable artifacts with human-readable diagnostics.
 
-## About
+## What It Does
 
-`kayto` is focused on transforming OpenAPI specs into a stable output schema through a parser + IR pipeline.
+`kayto` parses OpenAPI, builds an internal IR, and passes that IR to language generators.
 
-Its primary goal is the output schema itself. That schema can then be consumed by separate language-specific libraries (e.g., `kayto-ts`, `kayto-dart`, and future libraries for any other language).
-
-## Core Concept
+Core concept:
 
 ```text
-Input OpenAPI Spec ✅
+OpenAPI Spec (v2/v3, partial)
         |
         v
-      Parser ✅
+      Parser
         |
         v
-        IR ✅
+        IR
         |
         v
-Language Codegen Module 🛠️
-(any programming language, planned)
+   Generators
+   (ts ✅, dart ✅, ...)
         |
         v
-   Output Schema 🛠️
+  Output Artifacts
+ (generated/schema.ts, ...)
         |
         v
-API Client Libs 🚧
-(separate libraries, future)
+  API Client Libraries
+   (separate projects)
 ```
 
-In short: `kayto` is the parser/IR core that produces a stable output schema; separate libraries can use that schema to build type-safe API clients for TypeScript, Dart, and any other language.
+## Current Status
 
-## Why It Is Useful
+- TypeScript generator is implemented and produces `schema.ts`.
+- Dart generator is implemented and produces `schema.dart`.
+- Parsing is best-effort: unsupported parts are downgraded to `unknown` where possible.
+- Diagnostics are still emitted with context and stable codes.
 
-- Real-world OpenAPI files are often incomplete, inconsistent, or legacy-heavy.
-- Strict all-or-nothing parsers are hard to use in production pipelines.
-- `kayto` helps teams extract value now and improve specs incrementally.
+Important: this is not full OpenAPI v2/v3 compliance yet. It is practical coverage for many real APIs, not spec-complete coverage.
 
-## Key Characteristics
-
-- Best-effort parsing: returns valid parsed parts even when some parts fail.
-- Structured diagnostics with context (`path`, `method`, `status`, `stage`).
-- IR layer designed to support downstream generators and integrations.
-- Covers core practical OpenAPI v3 scenarios and part of OpenAPI v2 patterns.
-
-## Honest Project Status
-
-`kayto` does **not** claim full OpenAPI specification coverage yet (for either v2 or v3).
-
-The current implementation covers the main practical path (paths, methods, parameters, request body, responses, and core schema shapes), but some OpenAPI areas are still partial or not implemented.
-
-## Roadmap
-
-- [ ] Client code generation for **TypeScript** (priority #1)
-- [ ] Client code generation for **Dart** (priority #2)
-- [ ] Broader OpenAPI v2 coverage (including legacy edge cases)
-- [ ] Broader OpenAPI v3 coverage (more schema constructs and media-type handling)
-- [ ] Better diagnostics with clearer root-cause hints
-- [ ] Regression suite based on real public API specs
-- [ ] Stabilize IR as a reusable contract for integrations
-
-## Maintainer Note
-
-This project is currently maintained by a single author in spare time outside a full-time job.
-
-Small, focused PRs are very welcome and appreciated. Please keep changes scoped and incremental rather than large rewrites.
-
-## Current CLI Behavior
-
-The CLI currently reads `./api_example.json`, parses it, and prints:
-
-1. Number of parsed requests
-2. Parsed request details (`Debug` view)
-3. Grouped parse issues in a readable format:
-
-```text
-issue GET /pets:
-    problem: ...
-```
-
-## Run
+## CLI
 
 ```bash
-cargo run
+cargo run -- --input <OPENAPI_URL> [--lang ts|dart] [--output <PATH>]
 ```
 
-## Notes
+Arguments:
 
-- Parsing is best-effort: valid parts are still returned even if some parts fail.
-- Issues are grouped by `METHOD + PATH` for easier debugging.
-- OpenAPI `default` response is currently reported as an issue in status parsing because it is not a numeric HTTP status code.
+- `--input` (required): OpenAPI URL (HTTPS).
+- `--lang` (optional): target generator (`ts` or `dart`).
+- `--output` (optional): output file path. Default: `generated/schema.ts`.
+
+If `--lang` is omitted, CLI still parses and prints diagnostics, but does not generate a file.
+
+## Quick Start
+
+Generate TypeScript schema:
+
+```bash
+cargo run -- --lang ts --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.ts"
+```
+
+Or via helper script:
+
+```bash
+./scripts/generate-ts.sh
+```
+
+Generate Dart schema:
+
+```bash
+./scripts/generate-dart.sh
+```
+
+Script arguments:
+
+```bash
+./scripts/generate-ts.sh [output_path] [input_url]
+./scripts/generate-dart.sh [output_path] [input_url]
+```
+
+Defaults:
+
+- `output_path`: `generated/schema.ts`
+- `input_url`: GitHub public OpenAPI JSON
+
+For Dart script defaults:
+
+- `output_path`: `generated/schema.dart`
+- `input_url`: GitHub public OpenAPI JSON
+
+## Generated TypeScript Model
+
+The TS generator writes `schema.ts` with:
+
+- `Schemas` interface: map of model names (`Schemas["UserModel"]`).
+- `Endpoints` interface: endpoint metadata by method/path (`Endpoints["get"]["/path"]`).
+- Reuse of `Schemas[...]` in endpoint params/body/responses.
+
+Example:
+
+```ts
+import type { Endpoints } from "./schema";
+
+type GetUser = Endpoints["get"]["/user"];
+```
+
+## Generated Dart Model
+
+The Dart generator writes `schema.dart` with:
+
+- model typedefs (`typedef UserModel = ...`),
+- `Schemas.types` registry,
+- `EndpointMeta` model,
+- method groups with both alias and path access:
+  - `Endpoints.get.user`
+  - `Endpoints.get['/user']`
+
+Example:
+
+```dart
+import 'schema.dart';
+
+final endpoint = Endpoints.get.user;
+```
+
+## Diagnostics
+
+Diagnostics are grouped by endpoint and include:
+
+- kind: `unsupported`, `invalid_spec`, `incomplete_data`
+- stage: parser stage (`schema`, `response.ref`, `parameters.ref`, ...)
+- code: stable machine-readable code (for example, `unknown_schema_missing_type_and_ref`)
+- path/method/status context
+
+When schemas are downgraded to `unknown`, CLI also prints an aggregated summary by `unknown_*` code.
+
+## Project Structure
+
+```text
+src/
+  main.rs
+  spec.rs
+  parser/
+    parser.rs
+    diagnostics.rs
+    schema_mapping.rs
+    request_parameters.rs
+    request_responses.rs
+    reference_resolution.rs
+    endpoint_requests.rs
+  generators/
+    mod.rs
+    ts/
+      ts.rs
+      render.rs
+      convert.rs
+      names.rs
+      prepare_model_data.rs
+      utils.rs
+    dart/
+      dart.rs
+      render.rs
+      convert.rs
+      names.rs
+      prepare_model_data.rs
+      utils.rs
+```
+
+## Tests
+
+Run:
+
+```bash
+cargo test
+```
+
+The test suite currently covers parser behavior, CLI argument parsing, TS and Dart naming/formatting, and end-to-end rendering snapshots (including `anyOf` / `oneOf` / `allOf`).

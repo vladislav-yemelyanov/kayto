@@ -2,13 +2,13 @@
 name = "kayto"
 version = "0.1.8"
 edition = "2024"
-description = "Fast OpenAPI v2/v3 Parser"
+description = "Fast OpenAPI parser that turns imperfect specs into a stable output schema with actionable diagnostics."
 license = "MIT"
 repository = "https://github.com/vladislav-yemelyanov/kayto"
 readme = "README.md"
 
 [dependencies]
-clap = "4.5.51"
+clap = { version = "4.5.51", features = ["derive"] }
 reqwest = { version = "0.12.24", features = ["json"] }
 rootcause = "0.10.0"
 serde = { version = "1.0.228", features = ["derive"] }
