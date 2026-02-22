@@ -668,4 +668,247 @@ mod tests {
         assert_eq!(params[0].name, "id");
         assert_eq!(params[0].location.as_deref(), Some("path"));
     }
+
+    /// Ensures parameter diagnostics include missing-name errors.
+    #[test]
+    fn reports_parameter_without_name() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/broken-param": {
+                  "get": {
+                    "parameters": [
+                      { "in": "query", "schema": { "type": "string" } }
+                    ],
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": { "schema": { "type": "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.stage == "parameters" && i.detail.contains("parameter name is missing")));
+    }
+
+    /// Ensures parameter diagnostics include missing schema/type errors.
+    #[test]
+    fn reports_parameter_without_schema_or_type() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/no-schema": {
+                  "get": {
+                    "parameters": [
+                      { "name": "q", "in": "query" }
+                    ],
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": { "schema": { "type": "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.iter().any(|i| {
+            i.stage == "parameters" && i.detail.contains("parameter 'q' has no schema/type")
+        }));
+    }
+
+    /// Ensures invalid status code keys are reported.
+    #[test]
+    fn reports_non_numeric_status_code() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/default-status": {
+                  "get": {
+                    "responses": {
+                      "default": {
+                        "content": {
+                          "application/json": { "schema": { "type": "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed.issues.iter().any(|i| {
+            i.stage == "response.status" && i.detail.contains("status code is not a valid u16")
+        }));
+    }
+
+    /// Ensures invalid response references are reported in response.ref stage.
+    #[test]
+    fn reports_invalid_schema_ref() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/invalid-ref": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": { "schema": { "$ref": "#/" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.stage == "response.ref" && i.detail.contains("invalid $ref")));
+    }
+
+    /// Ensures empty combinator lists are downgraded to unknown with explicit code.
+    #[test]
+    fn maps_empty_anyof_to_unknown_with_code() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/empty-anyof": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": { "schema": { "anyOf": [] } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.code == Some("unknown_anyof_unparseable")));
+        let req = parsed.requests.first().expect("one request");
+        let r200 = req
+            .responses
+            .as_ref()
+            .expect("responses")
+            .get(&200)
+            .expect("200");
+        assert!(matches!(r200.schema_type, Some(SchemaType::Unknown)));
+    }
+
+    /// Ensures arrays without items are downgraded to unknown with explicit code.
+    #[test]
+    fn maps_array_without_items_to_unknown_with_code() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/array-no-items": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": { "schema": { "type": "array" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.code == Some("unknown_array_items_unparseable")));
+    }
+
+    /// Ensures object properties with null schema nodes emit schema diagnostics.
+    #[test]
+    fn reports_object_property_without_schema() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/null-property": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": {
+                            "schema": {
+                              "type": "object",
+                              "properties": {
+                                "id": null
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.stage == "schema" && i.detail.contains("without a schema")));
+    }
+
+    /// Ensures unsupported schema types are downgraded to unknown with explicit code.
+    #[test]
+    fn maps_unsupported_type_to_unknown_with_code() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/null-type": {
+                  "get": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": { "schema": { "type": "null" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(parsed
+            .issues
+            .iter()
+            .any(|i| i.code == Some("unknown_schema_type_not_supported")));
+        let req = parsed.requests.first().expect("one request");
+        let r200 = req
+            .responses
+            .as_ref()
+            .expect("responses")
+            .get(&200)
+            .expect("200");
+        assert!(matches!(r200.schema_type, Some(SchemaType::Unknown)));
+    }
 }

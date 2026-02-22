@@ -4,6 +4,15 @@
 
 Fast OpenAPI parser and schema generator that turns imperfect specs into stable artifacts with human-readable diagnostics.
 
+## Features
+
+- ⚡ Fast best-effort parsing for real-world OpenAPI specs.
+- 🧠 Actionable diagnostics with context (`method`, `path`, `status`, `stage`, `code`).
+- 🧩 Stable IR layer between parser and language generators.
+- ✅ TypeScript and Dart generators with endpoint metadata output.
+- 🛡️ Graceful fallback to `unknown` instead of hard-failing generation.
+- 🧪 Snapshot and unit tests for parser and generators.
+
 ## What It Does
 
 `kayto` parses OpenAPI, builds an internal IR, and passes that IR to language generators.
@@ -131,38 +140,6 @@ Diagnostics are grouped by endpoint and include:
 
 When schemas are downgraded to `unknown`, CLI also prints an aggregated summary by `unknown_*` code.
 
-## Project Structure
-
-```text
-src/
-  main.rs
-  spec.rs
-  parser/
-    parser.rs
-    diagnostics.rs
-    schema_mapping.rs
-    request_parameters.rs
-    request_responses.rs
-    reference_resolution.rs
-    endpoint_requests.rs
-  generators/
-    mod.rs
-    ts/
-      ts.rs
-      render.rs
-      convert.rs
-      names.rs
-      prepare_model_data.rs
-      utils.rs
-    dart/
-      dart.rs
-      render.rs
-      convert.rs
-      names.rs
-      prepare_model_data.rs
-      utils.rs
-```
-
 ## Tests
 
 Run:
@@ -172,3 +149,27 @@ cargo test
 ```
 
 The test suite currently covers parser behavior, CLI argument parsing, TS and Dart naming/formatting, and end-to-end rendering snapshots (including `anyOf` / `oneOf` / `allOf`).
+
+Coverage snapshot (`cargo llvm-cov --workspace --summary-only`):
+
+- Regions: `81.68%`
+- Lines: `86.39%`
+- Functions: `91.11%`
+
+## Test Coverage Status
+
+What is covered well:
+
+- Parser core flows and many degradation paths (`unknown_*` mapping + diagnostics).
+- TS and Dart render snapshots, including combinator scenarios (`anyOf` / `oneOf` / `allOf`).
+- Naming normalization/collision behavior.
+- Generator file-write entrypoints.
+- CLI argument parsing rules.
+
+What is not fully covered yet:
+
+- `main.rs` runtime flow (network fetch, end-to-end CLI execution with real HTTP).
+- Some conversion branches in `generators/ts/convert.rs` and `generators/dart/convert.rs`.
+- Some parser helper branches (`schema_mapping`, `request_parameters`) still have uncovered edge paths.
+
+Coverage is intentionally described as practical/high for core paths, but not 100%.
