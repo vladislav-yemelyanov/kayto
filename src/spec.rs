@@ -79,7 +79,9 @@ pub struct Method {
     pub responses: Option<HashMap<String, Option<Response>>>,
 }
 
-pub type Paths = Option<HashMap<String, Option<HashMap<MethodVariant, Method>>>>;
+pub type PathMethods = Option<HashMap<MethodVariant, Method>>;
+
+pub type Paths = Option<HashMap<String, PathMethods>>;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
