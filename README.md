@@ -10,6 +10,31 @@ Fast, pragmatic OpenAPI parser focused on useful output and actionable diagnosti
 
 The core idea is simple: do not fail the entire workflow because one part of the spec is imperfect. Parse what is valid, and report the rest with context.
 
+## Core Idea
+
+```text
+Input OpenAPI Spec ✅
+        |
+        v
+      Parser ✅
+        |
+        v
+        IR ✅
+        |
+        v
+Language Codegen Module 🛠️
+(any programming language, planned)
+        |
+        v
+   Output Schema 🛠️
+        |
+        v
+API Client Libs 🚧
+(separate libraries, future)
+```
+
+In short: `kayto` is the parser/IR core that produces a stable output schema, which can then be consumed by separate language-specific API client libraries for type-safe integrations.
+
 ## Why It Is Useful
 
 - Real-world OpenAPI files are often incomplete, inconsistent, or legacy-heavy.
@@ -28,8 +53,6 @@ The core idea is simple: do not fail the entire workflow because one part of the
 `kayto` does **not** claim full OpenAPI specification coverage yet (for either v2 or v3).
 
 The current implementation covers the main practical path (paths, methods, parameters, request body, responses, and core schema shapes), but some OpenAPI areas are still partial or not implemented.
-
-If you need strict full-spec compatibility for all edge cases, treat the current version as a strong foundation rather than a complete standards implementation.
 
 ## Roadmap
 
