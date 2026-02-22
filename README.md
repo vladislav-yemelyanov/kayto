@@ -2,16 +2,50 @@
 
 [![Crates.io](https://img.shields.io/crates/v/kayto.svg)](https://crates.io/crates/kayto)
 
-Fast OpenAPI v2/v3 parser with structured diagnostics.
+Fast, pragmatic OpenAPI parser focused on useful output and actionable diagnostics.
 
-## What It Does
+## About
 
-- Parses OpenAPI paths and methods.
-- Extracts:
-  - request parameters
-  - request body schema
-  - response schemas
-- Returns parsed requests plus parse issues (non-fatal problems with context: `path`, `method`, `status`).
+`kayto` converts OpenAPI specs into an intermediate representation (IR) that can be used for analysis, validation, and future code generation.
+
+The core idea is simple: do not fail the entire workflow because one part of the spec is imperfect. Parse what is valid, and report the rest with context.
+
+## Why It Is Useful
+
+- Real-world OpenAPI files are often incomplete, inconsistent, or legacy-heavy.
+- Strict all-or-nothing parsers are hard to use in production pipelines.
+- `kayto` helps teams extract value now and improve specs incrementally.
+
+## Key Characteristics
+
+- Best-effort parsing: returns valid parsed parts even when some parts fail.
+- Structured diagnostics with context (`path`, `method`, `status`, `stage`).
+- IR layer designed to support downstream generators and integrations.
+- Covers core practical OpenAPI v3 scenarios and part of OpenAPI v2 patterns.
+
+## Honest Project Status
+
+`kayto` does **not** claim full OpenAPI specification coverage yet (for either v2 or v3).
+
+The current implementation covers the main practical path (paths, methods, parameters, request body, responses, and core schema shapes), but some OpenAPI areas are still partial or not implemented.
+
+If you need strict full-spec compatibility for all edge cases, treat the current version as a strong foundation rather than a complete standards implementation.
+
+## Roadmap
+
+- [ ] Client code generation for **TypeScript** (priority #1)
+- [ ] Client code generation for **Dart** (priority #2)
+- [ ] Broader OpenAPI v2 coverage (including legacy edge cases)
+- [ ] Broader OpenAPI v3 coverage (more schema constructs and media-type handling)
+- [ ] Better diagnostics with clearer root-cause hints
+- [ ] Regression suite based on real public API specs
+- [ ] Stabilize IR as a reusable contract for integrations
+
+## Maintainer Note
+
+This project is currently maintained by a single author in spare time outside a full-time job.
+
+Small, focused PRs are very welcome and appreciated. Please keep changes scoped and incremental rather than large rewrites.
 
 ## Current CLI Behavior
 
