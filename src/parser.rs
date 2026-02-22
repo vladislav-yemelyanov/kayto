@@ -1,4 +1,5 @@
 use crate::spec;
+use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -12,29 +13,50 @@ pub enum PrimitiveType {
 #[derive(Debug, Clone)]
 pub struct Primitive {
     pub kind: PrimitiveType,
-    pub enum_values: Option<Vec<String>>,
-    // TODO: add descripiton, default, nullable, format
+    pub enum_values: Option<Vec<Value>>,
+    pub description: Option<String>,
+    pub default_value: Option<Value>,
+    pub nullable: Option<bool>,
+    pub format: Option<String>,
 }
 
 #[derive(Debug, Clone)]
+pub struct ObjectType {
+    pub properties: HashMap<String, SchemaType>,
+    pub required: Option<Vec<String>>,
+}
+
+#[derive(Debug)]
+pub struct ParsedParameter {
+    pub name: String,
+    pub location: Option<String>,
+    pub description: Option<String>,
+    pub required: Option<bool>,
+    pub schema_type: Option<SchemaType>,
+}
+
+#[derive(Debug, Clone)]
+/// Language-agnostic type model used as IR for code generation layers.
 pub enum SchemaType {
     Primitive(Primitive),
     Array(Box<SchemaType>),
-    Object(HashMap<String, SchemaType>),
+    Object(ObjectType),
     Ref(String),
 }
 
 #[derive(Debug)]
 pub struct ParsedResponse {
-    schema_type: Option<SchemaType>,
-    schema_name: Option<String>,
+    pub schema_type: Option<SchemaType>,
+    pub schema_name: Option<String>,
 }
 
 #[derive(Debug)]
+/// Intermediate representation (IR) for codegen modules (TypeScript, Dart, etc).
 pub struct Request {
     pub path: String,
     pub method: String,
-    pub params: Option<HashMap<String, SchemaType>>,
+    pub operation_id: Option<String>,
+    pub params: Option<Vec<ParsedParameter>>,
     pub body: Option<ParsedResponse>,
     pub responses: Option<HashMap<u16, ParsedResponse>>,
 }
@@ -91,23 +113,27 @@ fn issue(
 }
 
 fn get_schema_name_by_ref<'a>(reference: &'a str) -> Option<&'a str> {
-    reference.split("/").last()
+    reference
+        .split("/")
+        .last()
+        .and_then(|name| if name.is_empty() { None } else { Some(name) })
 }
 
 fn get_schema_by_ref<'a>(openapi: &spec::OpenAPI, reference: &'a str) -> Option<spec::Schema> {
     let name = get_schema_name_by_ref(reference)?;
     let components = &openapi.components.as_ref()?;
 
-    let schema1 = components.schemas.get(name); // v3
-
-    if let Some(schema1) = schema1 {
-        return schema1.clone();
+    if let Some(schemas) = components.schemas.as_ref() {
+        let schema_v3 = schemas.get(name);
+        if let Some(schema_v3) = schema_v3 {
+            return schema_v3.clone();
+        }
     }
 
-    let schema2 = components.definitions.as_ref()?.get(name); // v2
+    let schema_v2 = components.definitions.as_ref()?.get(name);
 
-    if let Some(schema2) = schema2 {
-        return schema2.clone();
+    if let Some(schema_v2) = schema_v2 {
+        return schema_v2.clone();
     }
 
     return None;
@@ -118,11 +144,40 @@ fn try_parse_schema(
     issues: &mut Vec<ParseIssue>,
     ctx: ParseCtx<'_>,
 ) -> Option<SchemaType> {
+    if let Some(reference) = &schema.reference {
+        let Some(schema_name) = get_schema_name_by_ref(&reference) else {
+            issue(
+                issues,
+                "schema.ref",
+                ctx,
+                format!("invalid $ref: '{reference}'"),
+            );
+            return None;
+        };
+        return Some(SchemaType::Ref(schema_name.to_string()));
+    }
+
     let type_name = schema.type_name.as_ref();
 
-    if let Some(reference) = &schema.reference {
-        let schema_name = get_schema_name_by_ref(&reference)?;
-        return Some(SchemaType::Ref(schema_name.to_string()));
+    if type_name.is_none() {
+        issue(
+            issues,
+            "schema",
+            ctx,
+            "schema has neither $ref nor explicit type",
+        );
+        return None;
+    }
+
+    fn to_primitive(kind: PrimitiveType, schema: &spec::Schema) -> SchemaType {
+        SchemaType::Primitive(Primitive {
+            kind,
+            enum_values: schema.enum_variants.clone(),
+            description: schema.description.clone(),
+            default_value: schema.default_value.clone(),
+            nullable: schema.nullable,
+            format: schema.format.clone(),
+        })
     }
 
     match type_name? {
@@ -165,7 +220,10 @@ fn try_parse_schema(
                     s.insert(key.to_string(), schema_type);
                 }
 
-                return Some(SchemaType::Object(s));
+                return Some(SchemaType::Object(ObjectType {
+                    properties: s,
+                    required: schema.required.clone(),
+                }));
             }
             issue(
                 issues,
@@ -175,27 +233,89 @@ fn try_parse_schema(
             );
             return None;
         }
-        spec::SchemaType::STRING => Some(SchemaType::Primitive(Primitive {
-            kind: PrimitiveType::String,
-            enum_values: None,
-        })),
-        spec::SchemaType::NUMBER => Some(SchemaType::Primitive(Primitive {
-            kind: PrimitiveType::Number,
-            enum_values: None,
-        })),
-        spec::SchemaType::INTEGER => Some(SchemaType::Primitive(Primitive {
-            kind: PrimitiveType::Integer,
-            enum_values: None,
-        })),
-        spec::SchemaType::BOOLEAN => Some(SchemaType::Primitive(Primitive {
-            kind: PrimitiveType::Boolean,
-            enum_values: None,
-        })),
+        spec::SchemaType::STRING => Some(to_primitive(PrimitiveType::String, schema)),
+        spec::SchemaType::NUMBER => Some(to_primitive(PrimitiveType::Number, schema)),
+        spec::SchemaType::INTEGER => Some(to_primitive(PrimitiveType::Integer, schema)),
+        spec::SchemaType::BOOLEAN => Some(to_primitive(PrimitiveType::Boolean, schema)),
         _ => {
             issue(issues, "schema", ctx, "schema type is unsupported");
             None
         }
     }
+}
+
+fn schema_from_parameter(param: &spec::MethodParams) -> Option<spec::Schema> {
+    match param.schema.as_ref() {
+        Some(schema) => Some(schema.clone()),
+        None => match param.type_name.as_ref() {
+            Some(type_name) => Some(spec::Schema {
+                reference: None,
+                type_name: Some(type_name.clone()),
+                description: param.description.clone(),
+                default_value: param.default_value.clone(),
+                nullable: param.nullable,
+                format: param.format.clone(),
+                required: None,
+                properties: None,
+                enum_variants: param.enum_variants.clone(),
+                items: param.items.clone(),
+            }),
+            None => None,
+        },
+    }
+}
+
+fn pick_content_schema<'a>(
+    content: &'a spec::ResponseContent,
+    issues: &mut Vec<ParseIssue>,
+    ctx: ParseCtx<'_>,
+) -> Option<&'a spec::Schema> {
+    if content.media_types.is_empty() {
+        issue(
+            issues,
+            "response",
+            ctx,
+            "response has no content media types",
+        );
+        return None;
+    }
+
+    let exact_json = content
+        .media_types
+        .get("application/json")
+        .and_then(|c| c.schema.as_ref());
+
+    if let Some(schema) = exact_json {
+        return Some(schema);
+    }
+
+    let mut media_types_with_schema: Vec<(&str, &spec::Schema)> = content
+        .media_types
+        .iter()
+        .filter_map(|(media_type, content)| {
+            content.schema.as_ref().map(|s| (media_type.as_str(), s))
+        })
+        .collect();
+    media_types_with_schema.sort_by(|a, b| a.0.cmp(b.0));
+
+    if let Some((_, schema)) = media_types_with_schema
+        .iter()
+        .find(|(media_type, _)| media_type.contains("json"))
+    {
+        return Some(*schema);
+    }
+
+    if let Some((_, schema)) = media_types_with_schema.first() {
+        return Some(*schema);
+    }
+
+    issue(
+        issues,
+        "response",
+        ctx,
+        "response content has no media type entries with schema",
+    );
+    None
 }
 
 fn try_parse_response(
@@ -213,18 +333,7 @@ fn try_parse_response(
         return None;
     };
 
-    let Some(json) = content.json.as_ref() else {
-        issue(
-            issues,
-            "response",
-            ctx,
-            "response content has no application/json schema",
-        );
-        return None;
-    };
-
-    let Some(schema) = json.schema.as_ref() else {
-        issue(issues, "response", ctx, "response json has no schema");
+    let Some(schema) = pick_content_schema(content, issues, ctx) else {
         return None;
     };
 
@@ -292,12 +401,8 @@ fn try_parse_responses(
 
         let status_ctx = ctx.with_status(Some(status_code.as_str()));
 
-        let Some(parsed_response) = try_parse_response(
-            &openapi,
-            &response,
-            issues,
-            status_ctx,
-        ) else {
+        let Some(parsed_response) = try_parse_response(&openapi, &response, issues, status_ctx)
+        else {
             issue(issues, "response", status_ctx, "failed to parse response");
             continue;
         };
@@ -312,32 +417,50 @@ fn try_parse_parameters(
     method: &spec::Method,
     issues: &mut Vec<ParseIssue>,
     ctx: ParseCtx<'_>,
-) -> Option<HashMap<String, SchemaType>> {
+) -> Option<Vec<ParsedParameter>> {
     if let Some(params) = &method.parameters {
-        let mut map: HashMap<String, SchemaType> = HashMap::new();
+        let mut parsed_params: Vec<ParsedParameter> = Vec::with_capacity(params.len());
 
         for param in params {
-            let Some(schema) = &param.schema else {
-                issue(issues, "parameters", ctx, "parameter has no schema");
-                continue;
-            };
-
-            let Some(schema_type) = try_parse_schema(&schema, issues, ctx) else {
-                issue(issues, "parameters", ctx, "parameter schema is unsupported");
-                continue;
-            };
-
-            let name = param.name.as_ref();
-
-            let Some(name) = name else {
+            let Some(name) = param.name.as_ref() else {
                 issue(issues, "parameters", ctx, "parameter name is missing");
                 continue;
             };
 
-            map.insert(name.to_string(), schema_type);
+            let schema = schema_from_parameter(param);
+
+            if schema.is_none() {
+                issue(
+                    issues,
+                    "parameters",
+                    ctx,
+                    format!("parameter '{name}' has no schema/type"),
+                );
+            }
+
+            let schema_type = schema
+                .as_ref()
+                .and_then(|schema| try_parse_schema(schema, issues, ctx));
+
+            if schema.is_some() && schema_type.is_none() {
+                issue(
+                    issues,
+                    "parameters",
+                    ctx,
+                    format!("parameter '{name}' schema is unsupported"),
+                );
+            }
+
+            parsed_params.push(ParsedParameter {
+                name: name.to_string(),
+                location: param.location.clone(),
+                description: param.description.clone(),
+                required: param.required,
+                schema_type,
+            });
         }
 
-        return Some(map);
+        return Some(parsed_params);
     }
 
     return None;
@@ -361,18 +484,14 @@ fn try_parse_path_methods(
                 let method_ctx = ParseCtx::new(Some(pathname), Some(method_name_str), None);
 
                 let params = try_parse_parameters(&method, issues, method_ctx);
-                let body = try_parse_response(
-                    &openapi,
-                    &method.request_body,
-                    issues,
-                    method_ctx,
-                );
+                let body = try_parse_response(&openapi, &method.request_body, issues, method_ctx);
 
                 let responses = try_parse_responses(&openapi, &method, issues, method_ctx);
 
                 let req = Request {
                     path: pathname.to_string(),
                     method: method_name,
+                    operation_id: method.operation_id.clone(),
                     params: params,
                     body: body,
                     responses: responses,

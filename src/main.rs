@@ -67,14 +67,10 @@ async fn main() -> Result<(), Report> {
 
     let f = fs::read("./api_example.json")?;
 
-    // let lines: Vec<&str> = text.lines().collect();
-    // for (i, line) in lines.iter().enumerate() {
-    //     println!("{:6} | {}", i + 1, line);
-    // }
-
     let openapi: spec::OpenAPI = serde_json::from_slice(&f)?;
 
-    let parsed = parser::parse(&openapi).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+    let parsed =
+        parser::parse(&openapi).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
     log_parsed_requests(&parsed.requests);
     log_issues(&parsed.issues);

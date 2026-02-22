@@ -34,9 +34,15 @@ pub struct Schema {
     pub reference: Option<String>,
     #[serde(rename = "type")]
     pub type_name: Option<SchemaType>,
+    pub description: Option<String>,
+    #[serde(rename = "default")]
+    pub default_value: Option<serde_json::Value>,
+    pub nullable: Option<bool>,
+    pub format: Option<String>,
+    pub required: Option<Vec<String>>,
     pub properties: Option<HashMap<String, Option<Schema>>>,
     #[serde(rename = "enum")]
-    pub enum_variants: Option<Vec<String>>,
+    pub enum_variants: Option<Vec<serde_json::Value>>,
     pub items: Option<Box<Schema>>,
 }
 
@@ -44,9 +50,20 @@ pub struct Schema {
 #[serde(rename_all = "camelCase")]
 pub struct MethodParams {
     pub name: Option<String>,
+    #[serde(rename = "in")]
+    pub location: Option<String>,
     pub description: Option<String>,
     pub required: Option<bool>,
     pub schema: Option<Schema>,
+    #[serde(rename = "type")]
+    pub type_name: Option<SchemaType>,
+    #[serde(rename = "default")]
+    pub default_value: Option<serde_json::Value>,
+    pub nullable: Option<bool>,
+    pub format: Option<String>,
+    #[serde(rename = "enum")]
+    pub enum_variants: Option<Vec<serde_json::Value>>,
+    pub items: Option<Box<Schema>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -56,12 +73,9 @@ pub struct Content {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct ResponseContent {
-    #[serde(rename = "application/json")]
-    pub json: Option<Content>,
-    #[serde(rename = "multipart/form-data")]
-    pub form_data: Option<Content>,
+    #[serde(flatten)]
+    pub media_types: HashMap<String, Content>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -73,7 +87,7 @@ pub struct Response {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Method {
-    pub operations_id: Option<String>,
+    pub operation_id: Option<String>,
     pub parameters: Option<Vec<MethodParams>>,
     pub request_body: Option<Response>,
     pub responses: Option<HashMap<String, Option<Response>>>,
@@ -86,7 +100,7 @@ pub type Paths = Option<HashMap<String, PathMethods>>;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Components {
-    pub schemas: HashMap<String, Option<Schema>>,
+    pub schemas: Option<HashMap<String, Option<Schema>>>,
     pub definitions: Option<HashMap<String, Option<Schema>>>,
 }
 
