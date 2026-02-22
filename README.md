@@ -2,15 +2,15 @@
 
 [![Crates.io](https://img.shields.io/crates/v/kayto.svg)](https://crates.io/crates/kayto)
 
-Fast, pragmatic OpenAPI parser focused on useful output and actionable diagnostics.
+Fast OpenAPI parser that turns imperfect specs into a stable output schema with actionable diagnostics.
 
 ## About
 
-`kayto` converts OpenAPI specs into an intermediate representation (IR) that can be used for analysis, validation, and future code generation.
+`kayto` is focused on transforming OpenAPI specs into a stable output schema through a parser + IR pipeline.
 
-The core idea is simple: do not fail the entire workflow because one part of the spec is imperfect. Parse what is valid, and report the rest with context.
+Its primary goal is the output schema itself. That schema can then be consumed by separate language-specific libraries (e.g., `kayto-ts`, `kayto-dart`, and future libraries for any other language).
 
-## Core Idea
+## Core Concept
 
 ```text
 Input OpenAPI Spec ✅
@@ -33,7 +33,7 @@ API Client Libs 🚧
 (separate libraries, future)
 ```
 
-In short: `kayto` is the parser/IR core that produces a stable output schema, which can then be consumed by separate language-specific API client libraries for type-safe integrations.
+In short: `kayto` is the parser/IR core that produces a stable output schema; separate libraries can use that schema to build type-safe API clients for TypeScript, Dart, and any other language.
 
 ## Why It Is Useful
 
