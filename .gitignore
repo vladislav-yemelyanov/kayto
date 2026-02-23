@@ -5,3 +5,5 @@ Cargo.lock
 CODING_RULES_RU.md
 generated/example.ts
 generated/example.dart
+generated/schema.ts
+generated/schema.dart
