@@ -6,6 +6,7 @@ description = "Fast OpenAPI parser that turns imperfect specs into a stable outp
 license = "MIT"
 repository = "https://github.com/vladislav-yemelyanov/kayto"
 readme = "README.md"
+exclude = ["releases/**"]
 
 [dependencies]
 clap = { version = "4.5.51", features = ["derive"] }
