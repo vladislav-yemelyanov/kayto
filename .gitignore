@@ -13,3 +13,4 @@ example/.dart_tool/
 example/.DS_Store
 example/**/.DS_Store
 example/generated/.DS_Store
+example/generated/
