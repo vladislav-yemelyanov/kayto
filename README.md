@@ -4,7 +4,7 @@
 
 Fast OpenAPI parser and schema generator that turns imperfect specs into stable artifacts with human-readable diagnostics.
 
-From imperfect OpenAPI to production-ready schema in minutes.
+From imperfect OpenAPI to production-ready schema with stable output and clear diagnostics.
 
 ## Features
 

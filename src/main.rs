@@ -10,7 +10,12 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io;
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use clap::{Parser, ValueEnum};
 use rootcause::Report;
@@ -35,7 +40,73 @@ struct Cli {
     output: PathBuf,
 }
 
+/// Lightweight terminal spinner to indicate progress for long-running stages.
+struct Spinner {
+    done: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl Spinner {
+    fn start(message: impl Into<String>) -> Self {
+        let message = message.into();
+        let done = Arc::new(AtomicBool::new(false));
+        let done_for_thread = Arc::clone(&done);
+
+        let handle = thread::spawn(move || {
+            let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let mut idx = 0usize;
+            while !done_for_thread.load(Ordering::Relaxed) {
+                eprint!("\r{} {}", frames[idx % frames.len()], message);
+                let _ = io::stderr().flush();
+                idx += 1;
+                thread::sleep(Duration::from_millis(100));
+            }
+        });
+
+        Self {
+            done,
+            handle: Some(handle),
+        }
+    }
+
+    fn finish(mut self, message: impl AsRef<str>) {
+        self.done.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+        eprintln!("\r{}\x1b[K", message.as_ref());
+    }
+}
+
+fn format_duration(duration: Duration) -> String {
+    if duration.as_millis() < 1000 {
+        format!("{} ms", duration.as_millis())
+    } else {
+        format!("{:.2} s", duration.as_secs_f64())
+    }
+}
+
+fn print_summary(
+    requests_count: usize,
+    issues_count: usize,
+    fetch_duration: Duration,
+    parse_duration: Duration,
+    generate_duration: Duration,
+    total_duration: Duration,
+) {
+    println!();
+    println!("Summary");
+    println!();
+    println!("✅ Requests parsed: {requests_count}");
+    println!("📝 Diagnostics: {issues_count}");
+    println!("🌐 Fetch: {}", format_duration(fetch_duration));
+    println!("🔍 Parse: {}", format_duration(parse_duration));
+    println!("⚙️ Generate: {}", format_duration(generate_duration));
+    println!("⏱️ Total: {}", format_duration(total_duration));
+}
+
 /// Prints a short request summary and optional verbose payload when debug mode is enabled.
+#[allow(dead_code)]
 fn log_parsed_requests(requests: &[parser::Request]) {
     println!("parsed requests: {}", requests.len());
 
@@ -139,16 +210,31 @@ fn log_unknown_summary(issues: &[parser::ParseIssue]) {
 /// Entry point: fetches the OpenAPI document, builds IR, runs generators, and prints diagnostics.
 #[tokio::main]
 async fn main() -> Result<(), Report> {
+    let total_start = Instant::now();
     let cli = Cli::parse();
     let lang = cli.lang;
     let input = cli.input;
     let output = cli.output;
 
+    let fetch_spinner = Spinner::start("Fetching OpenAPI spec...");
+    let fetch_start = Instant::now();
     let text = reqwest::get(&input).await?.text().await?;
-    let openapi: spec::OpenAPI = serde_json::from_str(&text)?;
+    let fetch_duration = fetch_start.elapsed();
+    fetch_spinner.finish(format!(
+        "✅ Fetched OpenAPI spec in {}",
+        format_duration(fetch_duration)
+    ));
 
+    let parse_spinner = Spinner::start("Parsing OpenAPI...");
+    let parse_start = Instant::now();
+    let openapi: spec::OpenAPI = serde_json::from_str(&text)?;
     let parsed =
         parser::parse(&openapi).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+    let parse_duration = parse_start.elapsed();
+    parse_spinner.finish(format!(
+        "✅ Parsed OpenAPI in {}",
+        format_duration(parse_duration)
+    ));
 
     if let Some(parent) = output.parent() {
         if !parent.as_os_str().is_empty() {
@@ -156,6 +242,14 @@ async fn main() -> Result<(), Report> {
         }
     }
 
+    let generate_spinner = Spinner::start(format!(
+        "Generating {} schema...",
+        match lang {
+            Lang::Ts => "TypeScript",
+            Lang::Dart => "Dart",
+        }
+    ));
+    let generate_start = Instant::now();
     match lang {
         Lang::Ts => {
             let generator = generators::ts::TsGenerator;
@@ -166,9 +260,22 @@ async fn main() -> Result<(), Report> {
             generator.generate(&parsed.requests, &output)?;
         }
     }
+    let generate_duration = generate_start.elapsed();
+    generate_spinner.finish(format!(
+        "✅ Generated schema in {}",
+        format_duration(generate_duration)
+    ));
 
-    log_parsed_requests(&parsed.requests);
+    // log_parsed_requests(&parsed.requests);
     log_issues(&parsed.issues);
+    print_summary(
+        parsed.requests.len(),
+        parsed.issues.len(),
+        fetch_duration,
+        parse_duration,
+        generate_duration,
+        total_start.elapsed(),
+    );
 
     Ok(())
 }
