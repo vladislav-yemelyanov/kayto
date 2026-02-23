@@ -190,7 +190,6 @@ Client SDKs as separate projects:
 
 Distribution and developer experience:
 
-- Publish release binaries for major platforms so Kayto can be installed and used directly as a CLI tool.
 - Improve docs for working with many different Swagger/OpenAPI services in real projects.
 - Add support for local spec files (`.json` / `.yaml`) in addition to HTTPS input.
 
