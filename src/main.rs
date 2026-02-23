@@ -216,6 +216,16 @@ async fn main() -> Result<(), Report> {
     let input = cli.input;
     let output = cli.output;
 
+    let lang_name = match lang {
+        Lang::Ts => "TypeScript",
+        Lang::Dart => "Dart",
+    };
+    println!("🚀 Starting generation");
+    println!("🎯 Target: {lang_name}");
+    println!("🌐 Input: {input}");
+    println!("📦 Output: {}", output.display());
+    println!();
+
     let fetch_spinner = Spinner::start("Fetching OpenAPI spec...");
     let fetch_start = Instant::now();
     let text = reqwest::get(&input).await?.text().await?;
