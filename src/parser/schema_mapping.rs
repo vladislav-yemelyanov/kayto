@@ -310,6 +310,21 @@ pub(crate) fn try_parse_schema(
         })
     }
 
+    /// Swagger 2.0 `type: file` is represented as a binary string for generators.
+    fn to_file_primitive(schema: &spec::Schema) -> SchemaType {
+        SchemaType::Primitive(Primitive {
+            kind: PrimitiveType::String,
+            enum_values: schema.enum_variants.clone(),
+            description: schema.description.clone(),
+            default_value: schema.default_value.clone(),
+            nullable: schema.nullable,
+            format: schema
+                .format
+                .clone()
+                .or_else(|| Some("binary".to_string())),
+        })
+    }
+
     match type_name {
         spec::SchemaType::ARRAY => {
             let parsed = parse_array_schema(schema, issues, ctx, schema_owner, schema_path);
@@ -333,6 +348,7 @@ pub(crate) fn try_parse_schema(
         spec::SchemaType::NUMBER => Some(to_primitive(PrimitiveType::Number, schema)),
         spec::SchemaType::INTEGER => Some(to_primitive(PrimitiveType::Integer, schema)),
         spec::SchemaType::BOOLEAN => Some(to_primitive(PrimitiveType::Boolean, schema)),
+        spec::SchemaType::FILE => Some(to_file_primitive(schema)),
         _ => {
             issue_with_code(
                 issues,

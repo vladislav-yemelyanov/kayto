@@ -188,7 +188,10 @@ fn render_endpoint_fields(
 
     if let Some(body) = req.body.as_ref() {
         let body_type = convert::parsed_response_to_dart_type(body, identifiers);
-        out.push_str(&format!("{field_indent}bodyType: {body_type},\n"));
+        out.push_str(&format!(
+            "{field_indent}bodyType: {},\n",
+            type_literal_expr(&body_type)
+        ));
     }
 
     if req
@@ -310,14 +313,12 @@ fn render_endpoint_params_contract(
         out.push_str(&format!("class {location_class} {{\n"));
         for param in &location_params {
             let field_name = sanitize_endpoint_getter_name(&param.name);
-            let mut ty = param
-                .schema_type
-                .as_ref()
-                .map(|schema| convert::schema_to_dart(schema, identifiers))
-                .unwrap_or_else(|| "Object?".to_string());
-            if !ty.ends_with('?') {
-                ty.push('?');
-            }
+        let mut ty = param
+            .schema_type
+            .as_ref()
+            .map(|schema| convert::schema_to_dart(schema, identifiers))
+            .unwrap_or_else(|| "Object?".to_string());
+            ty = ensure_nullable_type(&ty);
             out.push_str(&format!("  final {ty} {field_name};\n"));
         }
         out.push('\n');
@@ -381,7 +382,11 @@ fn render_endpoint_responses_contract(
     out.push_str(&format!("class {responses_class} {{\n"));
     for (status, parsed_response) in responses {
         let ty = convert::parsed_response_to_dart_type(parsed_response, identifiers);
-        out.push_str(&format!("  final {ty}? {};\n", status_field_name(*status)));
+        out.push_str(&format!(
+            "  final {} {};\n",
+            ensure_nullable_type(&ty),
+            status_field_name(*status)
+        ));
     }
     out.push('\n');
     out.push_str(&format!("  const {responses_class}({{\n"));
@@ -487,15 +492,19 @@ fn render_object_model_class(
     }
 
     out.push('\n');
-    out.push_str(&format!("  const {class_name}({{\n"));
-    for (field_name, _, is_required, _) in &fields {
-        if *is_required {
-            out.push_str(&format!("    required this.{field_name},\n"));
-        } else {
-            out.push_str(&format!("    this.{field_name},\n"));
+    if fields.is_empty() {
+        out.push_str(&format!("  const {class_name}();\n"));
+    } else {
+        out.push_str(&format!("  const {class_name}({{\n"));
+        for (field_name, _, is_required, _) in &fields {
+            if *is_required {
+                out.push_str(&format!("    required this.{field_name},\n"));
+            } else {
+                out.push_str(&format!("    this.{field_name},\n"));
+            }
         }
+        out.push_str("  });\n");
     }
-    out.push_str("  });\n");
     out.push_str("}\n");
 }
 
@@ -638,11 +647,30 @@ fn sanitize_dart_field_name(value: &str) -> String {
         out = format!("field{out}");
     }
 
+    let without_private_prefix = out.trim_start_matches('_');
+    if without_private_prefix.is_empty() {
+        out = "field".to_string();
+    } else if without_private_prefix != out {
+        out = without_private_prefix.to_string();
+    }
+
     if is_dart_keyword(&out) {
         return format!("{out}Field");
     }
 
     out
+}
+
+fn ensure_nullable_type(ty: &str) -> String {
+    if ty.ends_with('?') {
+        ty.to_string()
+    } else {
+        format!("{ty}?")
+    }
+}
+
+fn type_literal_expr(ty: &str) -> String {
+    ty.strip_suffix('?').unwrap_or(ty).to_string()
 }
 
 fn is_dart_keyword(value: &str) -> bool {

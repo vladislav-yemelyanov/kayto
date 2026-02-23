@@ -26,6 +26,7 @@ pub enum SchemaType {
     BOOLEAN,
     ARRAY,
     OBJECT,
+    FILE,
     NULL,
 }
 
@@ -130,5 +131,6 @@ pub struct Components {
 pub struct OpenAPI {
     pub paths: Paths,
     pub components: Option<Components>,
+    pub definitions: Option<BTreeMap<String, Option<Schema>>>,
     pub parameters: Option<BTreeMap<String, Option<MethodParams>>>,
 }

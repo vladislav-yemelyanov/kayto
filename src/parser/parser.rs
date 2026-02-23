@@ -94,9 +94,6 @@ pub struct ParseOutput {
 /// Parses reusable component schemas/definitions into IR model map.
 fn parse_component_models(openapi: &spec::OpenAPI, issues: &mut Vec<ParseIssue>) -> BTreeMap<String, SchemaType> {
     let mut models: BTreeMap<String, SchemaType> = BTreeMap::new();
-    let Some(components) = openapi.components.as_ref() else {
-        return models;
-    };
 
     let mut parse_component_group = |schemas: &BTreeMap<String, Option<spec::Schema>>, group_name: &str| {
         for (name, schema) in schemas {
@@ -124,10 +121,15 @@ fn parse_component_models(openapi: &spec::OpenAPI, issues: &mut Vec<ParseIssue>)
         }
     };
 
-    if let Some(schemas) = components.schemas.as_ref() {
-        parse_component_group(schemas, "schemas");
+    if let Some(components) = openapi.components.as_ref() {
+        if let Some(schemas) = components.schemas.as_ref() {
+            parse_component_group(schemas, "schemas");
+        }
+        if let Some(definitions) = components.definitions.as_ref() {
+            parse_component_group(definitions, "definitions");
+        }
     }
-    if let Some(definitions) = components.definitions.as_ref() {
+    if let Some(definitions) = openapi.definitions.as_ref() {
         parse_component_group(definitions, "definitions");
     }
 
@@ -956,5 +958,47 @@ mod tests {
             .get(&200)
             .expect("200");
         assert!(matches!(r200.schema_type, Some(SchemaType::Unknown)));
+    }
+
+    /// Ensures Swagger 2.0 `type: file` is parsed as a binary string primitive.
+    #[test]
+    fn maps_file_type_to_binary_string() {
+        let parsed = parse_json(
+            r##"{
+              "paths": {
+                "/upload": {
+                  "post": {
+                    "responses": {
+                      "200": {
+                        "content": {
+                          "application/json": { "schema": { "type": "file" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }"##,
+        );
+
+        assert!(!parsed
+            .issues
+            .iter()
+            .any(|i| i.code == Some("unknown_schema_type_not_supported")));
+
+        let req = parsed.requests.first().expect("one request");
+        let r200 = req
+            .responses
+            .as_ref()
+            .expect("responses")
+            .get(&200)
+            .expect("200");
+
+        let Some(SchemaType::Primitive(primitive)) = r200.schema_type.as_ref() else {
+            panic!("expected primitive schema");
+        };
+
+        assert!(matches!(primitive.kind, PrimitiveType::String));
+        assert_eq!(primitive.format.as_deref(), Some("binary"));
     }
 }
