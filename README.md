@@ -15,6 +15,43 @@ From imperfect OpenAPI to production-ready schema in minutes.
 - 🛡️ Generation keeps working even when parts of the spec are unsupported.
 - 🧪 Snapshot and unit tests for parser and generators.
 
+## Release Binaries (Multi-OS)
+
+`kayto` CLI release builds are available for 3 OS and 4 targets. ✅
+
+Support matrix:
+
+| OS                  | Target                     | Status   |
+| ------------------- | -------------------------- | -------- |
+| Linux (x64)         | `x86_64-unknown-linux-gnu` | ✅ Ready |
+| macOS Intel         | `x86_64-apple-darwin`      | ✅ Ready |
+| macOS Apple Silicon | `aarch64-apple-darwin`     | ✅ Ready |
+| Windows (x64)       | `x86_64-pc-windows-gnu`    | ✅ Ready |
+
+## Install From Releases
+
+Linux + macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
+```
+
+Specific version (optional):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | KAYTO_VERSION=v0.1.14 bash
+```
+
+```powershell
+$env:KAYTO_VERSION="v0.1.14"; irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
+```
+
 ## What It Does
 
 `kayto` parses OpenAPI, builds an internal IR, and passes that IR to language generators.
@@ -92,61 +129,6 @@ Defaults are provided by scripts:
 
 - TS: `generated/schema.ts` + GitHub public OpenAPI JSON
 - Dart: `generated/schema.dart` + GitHub public OpenAPI JSON
-
-## Release Binaries (Multi-OS)
-
-`kayto` CLI release builds are available for 3 OS and 4 targets. ✅
-
-Support matrix:
-
-| OS                  | Target                     | Status   |
-| ------------------- | -------------------------- | -------- |
-| Linux (x64)         | `x86_64-unknown-linux-gnu` | ✅ Ready |
-| macOS Intel         | `x86_64-apple-darwin`      | ✅ Ready |
-| macOS Apple Silicon | `aarch64-apple-darwin`     | ✅ Ready |
-| Windows (x64)       | `x86_64-pc-windows-gnu`    | ✅ Ready |
-
-## Install From Releases
-
-Install with one command:
-
-Linux + macOS:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | bash
-```
-
-Windows (PowerShell):
-
-```powershell
-irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
-```
-
-Install a specific version:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | KAYTO_VERSION=v0.1.14 bash
-```
-
-```powershell
-$env:KAYTO_VERSION="v0.1.14"; irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
-```
-
-Custom install path:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | KAYTO_INSTALL_DIR="$HOME/.local/bin" bash
-```
-
-```powershell
-$env:KAYTO_INSTALL_DIR="$env:USERPROFILE\\bin"; irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
-```
-
-Releases page:
-
-```text
-https://github.com/vladislav-yemelyanov/kayto/releases
-```
 
 ## Generated TypeScript Model
 

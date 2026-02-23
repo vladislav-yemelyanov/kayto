@@ -21,16 +21,40 @@ switch ($Arch.ToString()) {
 }
 
 $Target = "$TargetArch-pc-windows-gnu"
-$Archive = "kayto-$Version-$Target.zip"
-$Url = "https://github.com/$Repo/releases/download/$Version/$Archive"
 
 $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("kayto-install-" + [System.Guid]::NewGuid())
 New-Item -ItemType Directory -Path $TmpDir | Out-Null
 
 try {
-  $ZipPath = Join-Path $TmpDir $Archive
-  Write-Host "Downloading kayto $Version for $Target..."
-  Invoke-WebRequest -Uri $Url -OutFile $ZipPath
+  $TagCandidates = @($Version, ("v" + $Version.TrimStart("v")), $Version.TrimStart("v")) | Select-Object -Unique
+  $AssetVersionCandidates = @($Version, ("v" + $Version.TrimStart("v")), $Version.TrimStart("v")) | Select-Object -Unique
+
+  $ZipPath = $null
+  $ResolvedTag = $null
+
+  Write-Host "Resolving release asset for $Target..."
+  foreach ($Tag in $TagCandidates) {
+    foreach ($AssetVersion in $AssetVersionCandidates) {
+      $Archive = "kayto-$AssetVersion-$Target.zip"
+      $Url = "https://github.com/$Repo/releases/download/$Tag/$Archive"
+      $CandidatePath = Join-Path $TmpDir $Archive
+      try {
+        Invoke-WebRequest -Uri $Url -OutFile $CandidatePath
+        $ZipPath = $CandidatePath
+        $ResolvedTag = $Tag
+        break
+      }
+      catch {
+      }
+    }
+    if ($ZipPath) { break }
+  }
+
+  if (-not $ZipPath) {
+    throw "Failed to download release archive for $Target. Check assets: https://github.com/$Repo/releases"
+  }
+
+  Write-Host "Downloading kayto $ResolvedTag for $Target... done"
 
   Write-Host "Extracting..."
   Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
@@ -54,8 +78,15 @@ try {
   Move-Item -Path $BinaryPath -Destination $Destination -Force
 
   $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-  if (-not $UserPath.Split(';').Contains($InstallDir)) {
-    [Environment]::SetEnvironmentVariable("Path", ($UserPath.TrimEnd(';') + ";" + $InstallDir), "User")
+  if (-not $UserPath) { $UserPath = "" }
+  $PathItems = $UserPath.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)
+  if (-not ($PathItems -contains $InstallDir)) {
+    if ($UserPath) {
+      [Environment]::SetEnvironmentVariable("Path", ($UserPath.TrimEnd(';') + ";" + $InstallDir), "User")
+    }
+    else {
+      [Environment]::SetEnvironmentVariable("Path", $InstallDir, "User")
+    }
     Write-Host "Added $InstallDir to user PATH"
   }
 

@@ -48,17 +48,40 @@ case "$ARCH" in
     ;;
 esac
 
-ARCHIVE="${BINARY}-${VERSION}-${TARGET_ARCH}-${TARGET_OS}.tar.gz"
-URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
-
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-echo "Downloading ${BINARY} ${VERSION} for ${TARGET_ARCH}-${TARGET_OS}..."
-curl --fail --location --progress-bar --output "$TMP_DIR/$ARCHIVE" "$URL"
+TAG_CANDIDATES=("$VERSION" "v${VERSION#v}" "${VERSION#v}")
+ASSET_VERSION_CANDIDATES=("$VERSION" "v${VERSION#v}" "${VERSION#v}")
+
+RESOLVED_TAG=""
+ARCHIVE=""
+ZIP_PATH=""
+
+echo "Resolving release asset for ${TARGET_ARCH}-${TARGET_OS}..."
+for TAG in "${TAG_CANDIDATES[@]}"; do
+  for ASSET_VERSION in "${ASSET_VERSION_CANDIDATES[@]}"; do
+    ARCHIVE="${BINARY}-${ASSET_VERSION}-${TARGET_ARCH}-${TARGET_OS}.tar.gz"
+    URL="https://github.com/${REPO}/releases/download/${TAG}/${ARCHIVE}"
+    if curl --fail --silent --location --output "$TMP_DIR/$ARCHIVE" "$URL"; then
+      RESOLVED_TAG="$TAG"
+      ZIP_PATH="$TMP_DIR/$ARCHIVE"
+      break 2
+    fi
+  done
+done
+
+if [ -z "$RESOLVED_TAG" ] || [ -z "$ZIP_PATH" ]; then
+  echo "Failed to download release archive for ${TARGET_ARCH}-${TARGET_OS}" >&2
+  echo "Tried version forms: $VERSION, v${VERSION#v}, ${VERSION#v}" >&2
+  echo "Check release assets: https://github.com/${REPO}/releases" >&2
+  exit 1
+fi
+
+echo "Downloading ${BINARY} ${RESOLVED_TAG} for ${TARGET_ARCH}-${TARGET_OS}... done"
 
 echo "Extracting..."
-tar -xzf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR"
+tar -xzf "$ZIP_PATH" -C "$TMP_DIR"
 
 BINARY_PATH=""
 if [ -f "$TMP_DIR/$BINARY" ]; then
