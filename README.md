@@ -42,16 +42,6 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
 ```
 
-Specific version (optional):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | KAYTO_VERSION=v0.1.14 bash
-```
-
-```powershell
-$env:KAYTO_VERSION="v0.1.14"; irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
-```
-
 ## What It Does
 
 `kayto` parses OpenAPI, builds an internal IR, and passes that IR to language generators.
