@@ -22,25 +22,25 @@ From imperfect OpenAPI to production-ready schema in minutes.
 Core concept:
 
 ```text
-OpenAPI Spec (v2/v3, partial)
+OpenAPI Spec (v2/v3, partial) ✅
         |
         v
-      Parser
+      Parser ✅
         |
         v
-        IR
+        IR ✅
         |
         v
    Generators
    (ts ✅, dart ✅, ...)
         |
         v
-  Output Artifacts
+  Output Artifacts ✅
  (generated/schema.ts, ...)
         |
         v
   API Client Libraries
-   (separate projects)
+   (separate projects 🚧)
 ```
 
 ## Why Kayto
