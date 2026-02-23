@@ -1,7 +1,5 @@
-use crate::parser::{self, PrimitiveType, Request, SchemaType};
+use crate::parser::{self, PrimitiveType, SchemaType};
 use std::collections::BTreeMap;
-
-use super::utils;
 
 /// Converts parser IR schema nodes into Dart type expressions.
 pub fn schema_to_dart(schema: &SchemaType, identifiers: &BTreeMap<String, String>) -> String {
@@ -19,80 +17,6 @@ pub fn schema_to_dart(schema: &SchemaType, identifiers: &BTreeMap<String, String
         SchemaType::OneOf(_) | SchemaType::AnyOf(_) | SchemaType::AllOf(_) => "Object?".to_string(),
         SchemaType::Unknown => "Object?".to_string(),
     }
-}
-
-/// Converts operation parameters into endpoint metadata map grouped by location.
-pub fn params_to_dart_meta(
-    req: &Request,
-    identifiers: &BTreeMap<String, String>,
-) -> Option<String> {
-    let params = req.params.as_ref()?;
-    if params.is_empty() {
-        return None;
-    }
-
-    let mut by_location: BTreeMap<String, Vec<&parser::ParsedParameter>> = BTreeMap::new();
-    for param in params {
-        let location = param
-            .location
-            .as_deref()
-            .unwrap_or("other")
-            .to_ascii_lowercase();
-        by_location.entry(location).or_default().push(param);
-    }
-
-    let mut out = String::new();
-    out.push_str("{\n");
-
-    for (location, mut fields) in by_location {
-        fields.sort_by(|a, b| a.name.cmp(&b.name));
-        out.push_str(&format!("  {}: {{\n", utils::dart_quote(&location)));
-
-        for param in fields {
-            let mut ty = param
-                .schema_type
-                .as_ref()
-                .map(|schema| schema_to_dart(schema, identifiers))
-                .unwrap_or_else(|| "Object?".to_string());
-
-            if param.required != Some(true) && !ty.ends_with('?') {
-                ty.push('?');
-            }
-
-            out.push_str(&format!(
-                "    {}: {},\n",
-                utils::dart_quote(&param.name),
-                utils::dart_quote(&ty)
-            ));
-        }
-
-        out.push_str("  },\n");
-    }
-
-    out.push('}');
-    Some(out)
-}
-
-/// Converts operation responses into endpoint metadata map keyed by status code.
-pub fn responses_to_dart_meta(
-    req: &Request,
-    identifiers: &BTreeMap<String, String>,
-) -> Option<String> {
-    let responses = req.responses.as_ref()?;
-    if responses.is_empty() {
-        return None;
-    }
-
-    let mut out = String::new();
-    out.push_str("{\n");
-
-    for (status, parsed_response) in responses {
-        let ty = parsed_response_to_dart_type(parsed_response, identifiers);
-        out.push_str(&format!("  {status}: {},\n", utils::dart_quote(&ty)));
-    }
-
-    out.push('}');
-    Some(out)
 }
 
 /// Converts a parsed response node into a Dart type expression string.

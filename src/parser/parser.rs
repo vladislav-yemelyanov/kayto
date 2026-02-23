@@ -87,12 +87,57 @@ pub struct Request {
 #[derive(Debug)]
 pub struct ParseOutput {
     pub requests: Vec<Request>,
+    pub models: BTreeMap<String, SchemaType>,
     pub issues: Vec<ParseIssue>,
+}
+
+/// Parses reusable component schemas/definitions into IR model map.
+fn parse_component_models(openapi: &spec::OpenAPI, issues: &mut Vec<ParseIssue>) -> BTreeMap<String, SchemaType> {
+    let mut models: BTreeMap<String, SchemaType> = BTreeMap::new();
+    let Some(components) = openapi.components.as_ref() else {
+        return models;
+    };
+
+    let mut parse_component_group = |schemas: &BTreeMap<String, Option<spec::Schema>>, group_name: &str| {
+        for (name, schema) in schemas {
+            let Some(schema) = schema.as_ref() else {
+                issue(
+                    issues,
+                    "schema.component",
+                    ParseCtx::new(None, None, None),
+                    format!("component schema '{name}' in '{group_name}' is empty"),
+                );
+                models.entry(name.clone()).or_insert(SchemaType::Unknown);
+                continue;
+            };
+
+            let parsed = try_parse_schema(
+                schema,
+                issues,
+                ParseCtx::new(None, None, None),
+                "component schema",
+                &format!("$.components.{group_name}.{name}"),
+            )
+            .unwrap_or(SchemaType::Unknown);
+
+            models.entry(name.clone()).or_insert(parsed);
+        }
+    };
+
+    if let Some(schemas) = components.schemas.as_ref() {
+        parse_component_group(schemas, "schemas");
+    }
+    if let Some(definitions) = components.definitions.as_ref() {
+        parse_component_group(definitions, "definitions");
+    }
+
+    models
 }
 
 /// Parses an OpenAPI document into request IR and diagnostics.
 pub fn parse(openapi: &spec::OpenAPI) -> Result<ParseOutput, String> {
     let mut issues: Vec<ParseIssue> = vec![];
+    let models = parse_component_models(openapi, &mut issues);
     let mut reqs: Vec<Request> = vec![];
 
     match &openapi.paths {
@@ -115,6 +160,7 @@ pub fn parse(openapi: &spec::OpenAPI) -> Result<ParseOutput, String> {
 
             Ok(ParseOutput {
                 requests: reqs,
+                models,
                 issues,
             })
         }

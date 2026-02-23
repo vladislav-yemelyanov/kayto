@@ -8,8 +8,11 @@ pub struct ModelData {
 }
 
 /// Collects model definitions and referenced model names from parsed requests.
-pub fn prepare_model_data(requests: &[Request]) -> ModelData {
-    let mut model_definitions: BTreeMap<String, SchemaType> = BTreeMap::new();
+pub fn prepare_model_data(
+    requests: &[Request],
+    models: &BTreeMap<String, SchemaType>,
+) -> ModelData {
+    let mut model_definitions: BTreeMap<String, SchemaType> = models.clone();
     let mut model_names: BTreeSet<String> = BTreeSet::new();
 
     for req in requests {

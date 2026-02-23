@@ -263,11 +263,11 @@ async fn main() -> Result<(), Report> {
     match lang {
         Lang::Ts => {
             let generator = generators::ts::TsGenerator;
-            generator.generate(&parsed.requests, &output)?;
+            generator.generate(&parsed.requests, &parsed.models, &output)?;
         }
         Lang::Dart => {
             let generator = generators::dart::DartGenerator;
-            generator.generate(&parsed.requests, &output)?;
+            generator.generate(&parsed.requests, &parsed.models, &output)?;
         }
     }
     let generate_duration = generate_start.elapsed();

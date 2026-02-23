@@ -15,8 +15,13 @@ pub struct DartGenerator;
 
 impl Generator for DartGenerator {
     /// Renders and writes the Dart schema file to disk.
-    fn generate(&self, requests: &[parser::Request], output: &Path) -> io::Result<()> {
-        let file_content = render::render_schema_file(requests);
+    fn generate(
+        &self,
+        requests: &[parser::Request],
+        models: &std::collections::BTreeMap<String, parser::SchemaType>,
+        output: &Path,
+    ) -> io::Result<()> {
+        let file_content = render::render_schema_file(requests, models);
         fs::write(output, file_content)
     }
 }
@@ -37,7 +42,7 @@ mod tests {
         output.push(format!("kayto-dart-{nanos}.dart"));
 
         DartGenerator
-            .generate(&[], &output)
+            .generate(&[], &std::collections::BTreeMap::new(), &output)
             .expect("dart generation should write file");
 
         let text = fs::read_to_string(&output).expect("generated file should be readable");

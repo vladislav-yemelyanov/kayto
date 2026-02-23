@@ -10,5 +10,10 @@ use std::path::Path;
 /// Unified generator contract for language backends.
 pub trait Generator {
     /// Generates language-specific artifacts from parsed requests into the target output path.
-    fn generate(&self, requests: &[parser::Request], output: &Path) -> io::Result<()>;
+    fn generate(
+        &self,
+        requests: &[parser::Request],
+        models: &std::collections::BTreeMap<String, parser::SchemaType>,
+        output: &Path,
+    ) -> io::Result<()>;
 }
