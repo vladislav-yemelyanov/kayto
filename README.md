@@ -65,13 +65,13 @@ CLI arguments are required: `--lang`, `--input`, `--output`.
 TypeScript:
 
 ```bash
-cargo run -- --lang ts --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.ts"
+kayto --lang ts --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.ts"
 ```
 
 Dart:
 
 ```bash
-cargo run -- --lang dart --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.dart"
+kayto --lang dart --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.dart"
 ```
 
 Helper scripts:
@@ -105,25 +105,6 @@ Support matrix:
 | macOS Intel         | `x86_64-apple-darwin`      | ✅ Ready |
 | macOS Apple Silicon | `aarch64-apple-darwin`     | ✅ Ready |
 | Windows (x64)       | `x86_64-pc-windows-gnu`    | ✅ Ready |
-
-Build and package:
-
-```bash
-./cross.sh
-```
-
-Artifacts are created in:
-
-```text
-releases/v<version>/
-```
-
-Before running:
-
-```bash
-cargo install cross
-rustup target add x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu
-```
 
 ## Install From Releases
 
