@@ -1,6 +1,6 @@
 [package]
 name = "kayto"
-version = "0.1.14"
+version = "0.1.15"
 edition = "2024"
 description = "Fast OpenAPI parser that turns imperfect specs into a stable output schema with actionable diagnostics."
 license = "MIT"
