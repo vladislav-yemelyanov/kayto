@@ -7,3 +7,9 @@ generated/example.ts
 generated/example.dart
 generated/schema.ts
 generated/schema.dart
+example/.git/
+example/node_modules/
+example/.dart_tool/
+example/.DS_Store
+example/**/.DS_Store
+example/generated/.DS_Store
