@@ -4,13 +4,15 @@
 
 Fast OpenAPI parser and schema generator that turns imperfect specs into stable artifacts with human-readable diagnostics.
 
+From imperfect OpenAPI to production-ready schema in minutes.
+
 ## Features
 
 - ⚡ Fast best-effort parsing for real-world OpenAPI specs.
-- 🧠 Actionable diagnostics with context (`method`, `path`, `status`, `stage`, `code`).
+- 🧠 Clear, actionable diagnostics that help you fix spec issues faster.
 - 🧩 Stable IR layer between parser and language generators.
 - ✅ TypeScript and Dart generators with endpoint metadata output.
-- 🛡️ Graceful fallback to `unknown` instead of hard-failing generation.
+- 🛡️ Generation keeps working even when parts of the spec are unsupported.
 - 🧪 Snapshot and unit tests for parser and generators.
 
 ## What It Does
@@ -41,48 +43,45 @@ OpenAPI Spec (v2/v3, partial)
    (separate projects)
 ```
 
+## Why Kayto
+
+- Works even when OpenAPI is incomplete or inconsistent.
+- Keeps one stable schema contract (`Schemas` + `Endpoints`) across projects.
+- Lets teams integrate API clients quickly without custom parser glue.
+
 ## Current Status
 
-- TypeScript generator is implemented and produces `schema.ts`.
-- Dart generator is implemented and produces `schema.dart`.
-- Parsing is best-effort: unsupported parts are downgraded to `unknown` where possible.
-- Diagnostics are still emitted with context and stable codes.
+- ✅ TypeScript generator (`schema.ts`)
+- ✅ Dart generator (`schema.dart`)
+- ✅ Best-effort parsing with graceful fallback to `unknown`
+- ✅ Structured diagnostics with stable issue codes
 
-Important: this is not full OpenAPI v2/v3 compliance yet. It is practical coverage for many real APIs, not spec-complete coverage.
-
-## CLI
-
-```bash
-cargo run -- --lang <ts|dart> --input <OPENAPI_URL> --output <PATH>
-```
-
-Arguments:
-
-- `--lang` (required): target generator (`ts` or `dart`).
-- `--input` (required): OpenAPI URL (HTTPS).
-- `--output` (required): output file path.
+Note: Kayto targets practical API coverage, not full OpenAPI v2/v3 spec compliance.
 
 ## Quick Start
 
-Generate TypeScript schema:
+CLI arguments are required: `--lang`, `--input`, `--output`.
+
+TypeScript:
 
 ```bash
 cargo run -- --lang ts --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.ts"
 ```
 
-Or via helper script:
+Dart:
+
+```bash
+cargo run -- --lang dart --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.dart"
+```
+
+Helper scripts:
 
 ```bash
 ./scripts/generate-ts.sh
-```
-
-Generate Dart schema:
-
-```bash
 ./scripts/generate-dart.sh
 ```
 
-Script arguments:
+Scripts support optional args:
 
 ```bash
 ./scripts/generate-ts.sh [output_path] [input_url]
@@ -112,14 +111,11 @@ type GetUser = Endpoints["get"]["/user"];
 
 ## Generated Dart Model
 
-The Dart generator writes `schema.dart` with:
+The Dart output is built for simple client usage:
 
-- model typedefs (`typedef UserModel = ...`),
-- `Schemas.types` registry,
-- `EndpointMeta` model,
-- method groups with both alias and path access:
-  - `Endpoints.get.user`
-  - `Endpoints.get['/user']`
+- quick endpoint access (`Endpoints.get.user` or `Endpoints.get['/user']`),
+- one consistent schema contract across projects,
+- easy integration into API clients with minimal glue code.
 
 Example:
 
@@ -129,16 +125,47 @@ import 'schema.dart';
 final endpoint = Endpoints.get.user;
 ```
 
+## Kayto Schema Standard
+
+Kayto output is a stable contract designed for long-term maintenance:
+
+- predictable structure (`Schemas` + `Endpoints`),
+- easy client integration without per-project parser logic,
+- stable generated shape across releases to reduce integration churn.
+
+In short: generated schemas are reusable infrastructure, not throwaway code.
+
 ## Diagnostics
 
-Diagnostics are grouped by endpoint and include:
+Diagnostics are built for fast debugging:
 
-- kind: `unsupported`, `invalid_spec`, `incomplete_data`
-- stage: parser stage (`schema`, `response.ref`, `parameters.ref`, ...)
-- code: stable machine-readable code (for example, `unknown_schema_missing_type_and_ref`)
-- path/method/status context
+- show exactly which endpoint has a problem,
+- explain what went wrong in plain text,
+- keep stable issue codes for automation/CI,
+- provide a short summary of unsupported schema parts.
 
-When schemas are downgraded to `unknown`, CLI also prints an aggregated summary by `unknown_*` code.
+You can quickly see what to fix now and what can stay as-is for later.
+
+## Roadmap
+
+Planned generator targets:
+
+- Swift
+- Kotlin
+- C#
+- Go
+- Rust
+
+Client SDKs as separate projects:
+
+- `kayto-ts`
+- `kayto-dart`
+
+Distribution and developer experience:
+
+- Publish release binaries for major platforms so Kayto can be installed and used directly as a CLI tool.
+- Improve docs for working with many different Swagger/OpenAPI services in real projects.
+- Add support for local spec files (`.json` / `.yaml`) in addition to HTTPS input.
 
 ## Tests
 
@@ -148,28 +175,11 @@ Run:
 cargo test
 ```
 
-The test suite currently covers parser behavior, CLI argument parsing, TS and Dart naming/formatting, and end-to-end rendering snapshots (including `anyOf` / `oneOf` / `allOf`).
-
-Coverage snapshot (`cargo llvm-cov --workspace --summary-only`):
+Coverage (`cargo llvm-cov --workspace --summary-only`):
 
 - Regions: `81.68%`
 - Lines: `86.39%`
 - Functions: `91.11%`
 
-## Test Coverage Status
-
-What is covered well:
-
-- Parser core flows and many degradation paths (`unknown_*` mapping + diagnostics).
-- TS and Dart render snapshots, including combinator scenarios (`anyOf` / `oneOf` / `allOf`).
-- Naming normalization/collision behavior.
-- Generator file-write entrypoints.
-- CLI argument parsing rules.
-
-What is not fully covered yet:
-
-- `main.rs` runtime flow (network fetch, end-to-end CLI execution with real HTTP).
-- Some conversion branches in `generators/ts/convert.rs` and `generators/dart/convert.rs`.
-- Some parser helper branches (`schema_mapping`, `request_parameters`) still have uncovered edge paths.
-
-Coverage is intentionally described as practical/high for core paths, but not 100%.
+Covers most practical parser/generator scenarios.
+Main gaps: runtime/network paths in `main.rs` and a few deep edge branches.
