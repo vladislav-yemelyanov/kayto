@@ -93,6 +93,80 @@ Defaults are provided by scripts:
 - TS: `generated/schema.ts` + GitHub public OpenAPI JSON
 - Dart: `generated/schema.dart` + GitHub public OpenAPI JSON
 
+## Release Binaries (Multi-OS)
+
+`kayto` CLI release builds are available for 3 OS and 4 targets. ✅
+
+Support matrix:
+
+| OS                  | Target                     | Status   |
+| ------------------- | -------------------------- | -------- |
+| Linux (x64)         | `x86_64-unknown-linux-gnu` | ✅ Ready |
+| macOS Intel         | `x86_64-apple-darwin`      | ✅ Ready |
+| macOS Apple Silicon | `aarch64-apple-darwin`     | ✅ Ready |
+| Windows (x64)       | `x86_64-pc-windows-gnu`    | ✅ Ready |
+
+Build and package:
+
+```bash
+./cross.sh
+```
+
+Artifacts are created in:
+
+```text
+releases/v<version>/
+```
+
+Before running:
+
+```bash
+cargo install cross
+rustup target add x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu
+```
+
+## Install From Releases
+
+Install with one command:
+
+Linux + macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | KAYTO_VERSION=v0.1.14 bash
+```
+
+```powershell
+$env:KAYTO_VERSION="v0.1.14"; irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
+```
+
+Custom install path:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.sh | KAYTO_INSTALL_DIR="$HOME/.local/bin" bash
+```
+
+```powershell
+$env:KAYTO_INSTALL_DIR="$env:USERPROFILE\\bin"; irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps1 | iex
+```
+
+Releases page:
+
+```text
+https://github.com/vladislav-yemelyanov/kayto/releases
+```
+
 ## Generated TypeScript Model
 
 The TS generator writes `schema.ts` with:
