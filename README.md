@@ -48,25 +48,25 @@ irm https://raw.githubusercontent.com/vladislav-yemelyanov/kayto/main/install.ps
 Core concept:
 
 ```text
-OpenAPI Spec (v2/v3, partial) ✅
-        |
-        v
-      Parser ✅
-        |
-        v
-        IR ✅
-        |
-        v
-   Generators
-   (ts ✅, dart ✅, ...)
-        |
-        v
-  Output Artifacts ✅
- (generated/schema.ts, ...)
-        |
-        v
-  API Client Libraries
-   (separate projects 🚧)
+   OpenAPI Spec (v2/v3, partial) ✅
+                 |
+                 v
+             Parser ✅
+                 |
+                 v
+               IR ✅
+                 |
+                 v
+             Generators
+        (ts ✅, dart ✅, ...)
+                 |
+                 v
+         Output Artifacts ✅
+      (generated/schema.ts, ...)
+                 |
+                 v
+         API Client Libraries
+      (kayto_ts ✅, kayto_dart 🚧)
 ```
 
 ## Why Kayto
@@ -81,6 +81,9 @@ OpenAPI Spec (v2/v3, partial) ✅
 - ✅ Dart generator (`schema.dart`)
 - ✅ Best-effort parsing with graceful fallback to `unknown`
 - ✅ Structured diagnostics with stable issue codes
+- ✅ Production-ready TypeScript client:
+  [`kayto_ts`](https://github.com/vladislav-yemelyanov/kayto_ts)
+- 🚧 Dart client is in progress
 
 Note: Kayto targets practical API coverage, not full OpenAPI v2/v3 spec compliance.
 
@@ -184,8 +187,8 @@ Planned generator targets:
 
 Client SDKs as separate projects:
 
-- `kayto-ts`
-- `kayto-dart`
+- ✅ [`kayto_ts`](https://github.com/vladislav-yemelyanov/kayto_ts) — production-ready
+- 🚧 `kayto_dart` — in progress
 
 Distribution and developer experience:
 
