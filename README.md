@@ -6,6 +6,25 @@ Fast OpenAPI parser and schema generator that turns imperfect specs into stable 
 
 From imperfect OpenAPI to production-ready schema with stable output and clear diagnostics.
 
+## Why You Need It
+
+Imagine you have one backend that publishes OpenAPI, but many consumers:
+
+- web app (TypeScript/JavaScript),
+- mobile app (Flutter/Dart),
+- other internal tools and services.
+
+Without a stable contract, each client can interpret the API differently and break in its own way.
+
+`kayto` solves this by turning OpenAPI into predictable, language-specific schema artifacts.
+Then each consumer uses its own client layer built on top of those schemas.
+
+Example:
+
+- `kayto` -> generates `schema.ts` / `schema.dart` from backend OpenAPI.
+- `kayto_ts` -> uses generated TypeScript schema to provide a type-safe API client.
+- same pattern can be used for other client ecosystems.
+
 ## Features
 
 - ⚡ Fast best-effort parsing for real-world OpenAPI specs.
