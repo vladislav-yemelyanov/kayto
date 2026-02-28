@@ -13,7 +13,6 @@ From imperfect OpenAPI to production-ready schema with stable output and clear d
 - 🧩 Stable IR layer between parser and language generators.
 - ✅ TypeScript and Dart generators with endpoint metadata output.
 - 🛡️ Generation keeps working even when parts of the spec are unsupported.
-- 🧪 Snapshot and unit tests for parser and generators.
 
 ## Release Binaries (Multi-OS)
 
@@ -192,20 +191,3 @@ Distribution and developer experience:
 
 - Improve docs for working with many different Swagger/OpenAPI services in real projects.
 - Add support for local spec files (`.json` / `.yaml`) in addition to HTTPS input.
-
-## Tests
-
-Run:
-
-```bash
-cargo test
-```
-
-Coverage (`cargo llvm-cov --workspace --summary-only`):
-
-- Regions: `81.68%`
-- Lines: `86.39%`
-- Functions: `91.11%`
-
-Covers most practical parser/generator scenarios.
-Main gaps: runtime/network paths in `main.rs` and a few deep edge branches.

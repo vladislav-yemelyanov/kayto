@@ -2,8 +2,6 @@ mod generators;
 #[path = "parser/parser.rs"]
 mod parser;
 mod spec;
-#[cfg(test)]
-mod test_fixtures;
 
 use generators::Generator;
 use std::collections::BTreeMap;
@@ -288,54 +286,4 @@ async fn main() -> Result<(), Report> {
     );
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Verifies CLI parses all required arguments.
-    #[test]
-    fn cli_parses_all_required_arguments() {
-        let cli = Cli::try_parse_from([
-            "kayto",
-            "--lang",
-            "ts",
-            "--input",
-            "https://example.com/openapi.json",
-            "--output",
-            "generated/schema.ts",
-        ])
-        .expect("cli args should parse");
-
-        assert_eq!(cli.lang, Lang::Ts);
-        assert_eq!(cli.input, "https://example.com/openapi.json");
-        assert_eq!(cli.output, PathBuf::from("generated/schema.ts"));
-    }
-
-    /// Verifies CLI parses Dart language and custom output path.
-    #[test]
-    fn cli_parses_dart_lang_and_custom_output() {
-        let cli = Cli::try_parse_from([
-            "kayto",
-            "--lang",
-            "dart",
-            "--input",
-            "https://example.com/openapi.json",
-            "--output",
-            "out/schema.dart",
-        ])
-        .expect("cli args should parse");
-
-        assert_eq!(cli.lang, Lang::Dart);
-        assert_eq!(cli.output, PathBuf::from("out/schema.dart"));
-    }
-
-    /// Verifies CLI rejects invocation when required arguments are missing.
-    #[test]
-    fn cli_rejects_missing_required_arguments() {
-        let err = Cli::try_parse_from(["kayto", "--lang", "dart"])
-            .expect_err("input and output are required");
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
 }

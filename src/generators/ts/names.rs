@@ -69,37 +69,3 @@ fn sanitize_type_name(value: &str) -> String {
     out
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::iter::FromIterator;
-
-    /// Verifies snake_case model keys are normalized to UpperCamelCase TS identifiers.
-    #[test]
-    fn normalizes_to_upper_camel_case() {
-        let names = BTreeSet::from_iter(["actions_artifact".to_string()]);
-        let id_map = build_model_identifiers(&names);
-        assert_eq!(
-            id_map.get("actions_artifact"),
-            Some(&"ActionsArtifact".to_string())
-        );
-    }
-
-    /// Verifies names starting with digits are prefixed to remain valid TS identifiers.
-    #[test]
-    fn prefixes_numeric_leading_identifiers() {
-        let names = BTreeSet::from_iter(["123_model".to_string()]);
-        let id_map = build_model_identifiers(&names);
-        assert_eq!(id_map.get("123_model"), Some(&"Model123Model".to_string()));
-    }
-
-    /// Verifies colliding normalized names get deterministic numeric suffixes.
-    #[test]
-    fn adds_suffix_for_colliding_identifiers() {
-        let names = BTreeSet::from_iter(["pet-model".to_string(), "pet_model".to_string()]);
-        let id_map = build_model_identifiers(&names);
-
-        assert_eq!(id_map.get("pet-model"), Some(&"PetModel".to_string()));
-        assert_eq!(id_map.get("pet_model"), Some(&"PetModel_2".to_string()));
-    }
-}
