@@ -4,7 +4,15 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use super::{format, identifiers, model_catalog, typing};
 
-/// Builds the final `schema.dart` content from parsed request IR.
+/// Builds full `schema.dart` file content.
+///
+/// Generates sections in fixed order:
+/// 1) model aliases/classes, 2) `Schemas`, 3) `HttpMethod`, 4) `Endpoints`.
+///
+/// Example:
+/// `typedef User = ...;`
+/// `abstract final class Schemas {...}`
+/// `abstract final class Endpoints {...}`
 pub fn build_schema_file(
     requests: &[Request],
     models: &BTreeMap<String, crate::parser::SchemaType>,
@@ -22,7 +30,12 @@ pub fn build_schema_file(
     out
 }
 
-/// Adds top-level model type aliases used by schema registry and endpoints.
+/// Adds top-level model declarations (`typedef`, class, enum) for schemas.
+///
+/// Example:
+/// `typedef UserId = String;`
+/// `class User {...}`
+/// `enum Status {...}`
 fn add_model_types(
     out: &mut String,
     model_data: &model_catalog::ModelCatalog,
@@ -66,7 +79,10 @@ fn add_model_types(
     }
 }
 
-/// Adds schema registry with original schema keys and generated Dart alias names.
+/// Adds `Schemas` namespace with typed schema getters.
+///
+/// Example:
+/// `abstract final class Schemas { static User? get user => null; }`
 fn add_schemas_namespace(
     out: &mut String,
     model_data: &model_catalog::ModelCatalog,
@@ -88,6 +104,10 @@ fn add_schemas_namespace(
     out.push_str("}\n\n");
 }
 
+/// Adds HTTP method enum used by endpoint contracts.
+///
+/// Example:
+/// `enum HttpMethod { get, post }`
 fn add_http_method_enum(out: &mut String, methods: &BTreeMap<String, BTreeMap<String, &Request>>) {
     out.push_str("enum HttpMethod {\n");
     for method in methods.keys() {
@@ -96,7 +116,10 @@ fn add_http_method_enum(out: &mut String, methods: &BTreeMap<String, BTreeMap<St
     out.push_str("}\n\n");
 }
 
-/// Adds endpoint metadata grouped by HTTP method.
+/// Adds root `Endpoints` namespace grouped by HTTP method.
+///
+/// Example:
+/// `abstract final class Endpoints { static const get = EndpointsGet(); }`
 fn add_endpoints_namespace(
     out: &mut String,
     methods: &BTreeMap<String, BTreeMap<String, &Request>>,
@@ -112,7 +135,10 @@ fn add_endpoints_namespace(
     out.push_str("}\n");
 }
 
-/// Adds typed method classes with endpoint getters and by-path maps.
+/// Adds method-specific endpoint classes with typed getters.
+///
+/// Example:
+/// `class EndpointsGet { EndpointGetUsers get users => _users; }`
 fn add_method_endpoint_classes(
     out: &mut String,
     methods: &BTreeMap<String, BTreeMap<String, &Request>>,
@@ -151,6 +177,10 @@ fn add_method_endpoint_classes(
     }
 }
 
+/// Adds constructor argument values for one endpoint constant.
+///
+/// Example:
+/// `path: '/users', method: HttpMethod.get, bodyType: User`
 fn add_endpoint_fields(
     out: &mut String,
     field_indent: &str,
@@ -213,6 +243,10 @@ fn add_endpoint_fields(
     }
 }
 
+/// Adds endpoint contract class and links params/responses contracts if present.
+///
+/// Example:
+/// `class EndpointGetUsers { final String path; final Type? bodyType; ... }`
 fn add_single_endpoint_contract(
     out: &mut String,
     method: &str,
@@ -266,6 +300,10 @@ fn add_single_endpoint_contract(
     out.push_str("}\n\n");
 }
 
+/// Adds params contract classes for an endpoint (`...Params` and per-location classes).
+///
+/// Example:
+/// `class EndpointGetUsersParams { final EndpointGetUsersParamsQuery? query; }`
 fn add_endpoint_params_contract(
     out: &mut String,
     method: &str,
@@ -332,6 +370,10 @@ fn add_endpoint_params_contract(
     }
 }
 
+/// Adds default `null` values for endpoint params object.
+///
+/// Example:
+/// `query: EndpointGetUsersParamsQuery(id: null,),`
 fn add_endpoint_params_value(
     out: &mut String,
     indent: &str,
@@ -367,6 +409,10 @@ fn add_endpoint_params_value(
     }
 }
 
+/// Adds responses contract class for an endpoint.
+///
+/// Example:
+/// `class EndpointGetUsersResponses { final User? s200; }`
 fn add_endpoint_responses_contract(
     out: &mut String,
     method: &str,
@@ -397,6 +443,10 @@ fn add_endpoint_responses_contract(
     out.push_str("}\n\n");
 }
 
+/// Adds default `null` values for endpoint responses object.
+///
+/// Example:
+/// `s200: null,`
 fn add_endpoint_responses_value(
     out: &mut String,
     indent: &str,
@@ -443,6 +493,10 @@ fn status_field_name(status: u16) -> String {
     format!("s{status}")
 }
 
+/// Adds Dart class declaration for object schema.
+///
+/// Example:
+/// `class User { final String id; const User({required this.id}); }`
 fn add_object_model_class(
     out: &mut String,
     class_name: &str,
@@ -508,6 +562,10 @@ fn add_object_model_class(
     out.push_str("}\n");
 }
 
+/// Adds Dart enum declaration for string enum schema values.
+///
+/// Example:
+/// `enum Status { active('active'), blocked('blocked'); ... }`
 fn add_string_enum_model(out: &mut String, enum_name: &str, values: &[Value]) -> bool {
     let mut cases: Vec<(String, String)> = Vec::new();
     let mut used_names = HashSet::new();

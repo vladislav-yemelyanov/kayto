@@ -3,7 +3,15 @@ use std::collections::BTreeMap;
 
 use super::{format, identifiers, model_catalog, typing};
 
-/// Builds the final `schema.ts` content from parsed request IR.
+/// Builds full `schema.ts` file content.
+///
+/// Generates sections in fixed order:
+/// 1) model aliases, 2) `Schemas`, 3) `Endpoints`.
+///
+/// Example:
+/// `export type User = {...};`
+/// `export interface Schemas {...}`
+/// `export interface Endpoints {...}`
 pub fn build_schema_file(
     requests: &[Request],
     models: &BTreeMap<String, crate::parser::SchemaType>,
@@ -21,6 +29,9 @@ pub fn build_schema_file(
 }
 
 /// Adds top-level model type aliases used by schema registry and endpoints.
+///
+/// Example:
+/// `export type User = { "id": string; };`
 fn add_model_types(
     out: &mut String,
     catalog: &model_catalog::ModelCatalog,
@@ -40,7 +51,10 @@ fn add_model_types(
     }
 }
 
-/// Adds `Schemas` interface that maps schema keys to generated TS model aliases.
+/// Adds `Schemas` interface that maps source schema keys to TS aliases.
+///
+/// Example:
+/// `export interface Schemas { "user": User; }`
 fn add_schemas(
     out: &mut String,
     catalog: &model_catalog::ModelCatalog,
@@ -56,7 +70,10 @@ fn add_schemas(
     out.push_str("}\n\n");
 }
 
-/// Adds endpoint metadata grouped by HTTP method.
+/// Adds `Endpoints` interface grouped by HTTP method.
+///
+/// Example:
+/// `export interface Endpoints { "get": { "/users": {...}; }; }`
 fn add_endpoints(out: &mut String, methods: &BTreeMap<String, BTreeMap<String, &Request>>) {
     out.push_str("export interface Endpoints {\n");
     for (method, path_map) in methods {
@@ -69,7 +86,10 @@ fn add_endpoints(out: &mut String, methods: &BTreeMap<String, BTreeMap<String, &
     out.push_str("}\n");
 }
 
-/// Adds one endpoint metadata record under a method-specific interface.
+/// Adds one endpoint metadata entry for a single method + path.
+///
+/// Example:
+/// `"/users": { path: "/users"; method: "get"; params?: never; ... };`
 fn add_endpoint(out: &mut String, method: &str, path: &str, req: &Request) {
     out.push_str(&format!("    {}: {{\n", format::quote(path)));
     out.push_str(&format!("      path: {};\n", format::quote(&req.path)));
