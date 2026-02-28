@@ -1,58 +1,58 @@
 use crate::parser::{Request, SchemaType};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Prepared registry data used by the Dart renderer.
-pub struct ModelData {
+/// Collected registry used by Dart schema generation.
+pub struct ModelCatalog {
     pub definitions: BTreeMap<String, SchemaType>,
     pub names: BTreeSet<String>,
 }
 
 /// Collects model definitions and referenced model names from parsed requests.
-pub fn prepare_model_data(
+pub fn build_model_catalog(
     requests: &[Request],
     models: &BTreeMap<String, SchemaType>,
-) -> ModelData {
+) -> ModelCatalog {
     let mut model_definitions: BTreeMap<String, SchemaType> = models.clone();
     let mut model_names: BTreeSet<String> = BTreeSet::new();
 
     for req in requests {
-        add_models_from_request(req, &mut model_definitions, &mut model_names);
+        collect_request_models(req, &mut model_definitions, &mut model_names);
     }
 
     for model_name in model_definitions.keys() {
         model_names.insert(model_name.to_string());
     }
 
-    ModelData {
+    ModelCatalog {
         definitions: model_definitions,
         names: model_names,
     }
 }
 
 /// Processes all schema-carrying parts of a request and updates model registries.
-fn add_models_from_request(
+fn collect_request_models(
     req: &Request,
     model_definitions: &mut BTreeMap<String, SchemaType>,
     model_names: &mut BTreeSet<String>,
 ) {
-    add_models_from_params(req, model_names);
-    add_models_from_body(req, model_definitions, model_names);
-    add_models_from_responses(req, model_definitions, model_names);
+    collect_param_models(req, model_names);
+    collect_body_models(req, model_definitions, model_names);
+    collect_response_models(req, model_definitions, model_names);
 }
 
 /// Collects model references from operation parameters.
-fn add_models_from_params(req: &Request, model_names: &mut BTreeSet<String>) {
+fn collect_param_models(req: &Request, model_names: &mut BTreeSet<String>) {
     if let Some(params) = &req.params {
         for param in params {
             if let Some(schema_type) = &param.schema_type {
-                collect_ref_names(schema_type, model_names);
+                collect_schema_refs(schema_type, model_names);
             }
         }
     }
 }
 
 /// Collects model definitions and references from request body schema.
-fn add_models_from_body(
+fn collect_body_models(
     req: &Request,
     model_definitions: &mut BTreeMap<String, SchemaType>,
     model_names: &mut BTreeSet<String>,
@@ -66,13 +66,13 @@ fn add_models_from_body(
         );
 
         if let Some(schema_type) = &body.schema_type {
-            collect_ref_names(schema_type, model_names);
+            collect_schema_refs(schema_type, model_names);
         }
     }
 }
 
 /// Collects model definitions and references from response schemas.
-fn add_models_from_responses(
+fn collect_response_models(
     req: &Request,
     model_definitions: &mut BTreeMap<String, SchemaType>,
     model_names: &mut BTreeSet<String>,
@@ -87,7 +87,7 @@ fn add_models_from_responses(
             );
 
             if let Some(schema_type) = &response.schema_type {
-                collect_ref_names(schema_type, model_names);
+                collect_schema_refs(schema_type, model_names);
             }
         }
     }
@@ -114,22 +114,20 @@ fn register_named_schema(
 }
 
 /// Traverses a schema tree and collects all `$ref` model names.
-fn collect_ref_names(schema: &SchemaType, names: &mut BTreeSet<String>) {
+fn collect_schema_refs(schema: &SchemaType, names: &mut BTreeSet<String>) {
     match schema {
         SchemaType::Ref(name) => {
             names.insert(name.clone());
         }
-        SchemaType::Array(inner) => collect_ref_names(inner, names),
+        SchemaType::Array(inner) => collect_schema_refs(inner, names),
         SchemaType::Object(obj) => {
             for value in obj.properties.values() {
-                collect_ref_names(value, names);
+                collect_schema_refs(value, names);
             }
         }
-        SchemaType::OneOf(variants)
-        | SchemaType::AnyOf(variants)
-        | SchemaType::AllOf(variants) => {
+        SchemaType::OneOf(variants) | SchemaType::AnyOf(variants) | SchemaType::AllOf(variants) => {
             for variant in variants {
-                collect_ref_names(variant, names);
+                collect_schema_refs(variant, names);
             }
         }
         SchemaType::Primitive(_) | SchemaType::Unknown => {}

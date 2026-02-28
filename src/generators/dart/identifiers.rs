@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// Creates stable and unique Dart identifiers for schema registry keys.
-pub fn build_model_identifiers(model_names: &BTreeSet<String>) -> BTreeMap<String, String> {
+pub fn build_type_names(model_names: &BTreeSet<String>) -> BTreeMap<String, String> {
     let mut used: HashSet<String> = HashSet::new();
     let mut identifiers = BTreeMap::new();
 
     for name in model_names {
-        let base = sanitize_type_name(name);
+        let base = normalize_type_name(name);
         let mut candidate = base.clone();
         let mut n = 2usize;
 
@@ -23,7 +23,7 @@ pub fn build_model_identifiers(model_names: &BTreeSet<String>) -> BTreeMap<Strin
 }
 
 /// Normalizes arbitrary schema names into valid UpperCamelCase Dart type names.
-fn sanitize_type_name(value: &str) -> String {
+fn normalize_type_name(value: &str) -> String {
     let mut parts: Vec<String> = Vec::new();
     let mut current = String::new();
 

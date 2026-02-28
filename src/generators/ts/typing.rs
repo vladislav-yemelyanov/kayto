@@ -2,13 +2,13 @@ use crate::parser::{self, PrimitiveType, Request, SchemaType};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 
-use super::utils;
+use super::format;
 
 /// Converts parser IR schema nodes into TypeScript type expressions.
-pub fn schema_to_ts(schema: &SchemaType) -> String {
+pub fn schema_type(schema: &SchemaType) -> String {
     match schema {
-        SchemaType::Primitive(p) => primitive_to_ts(p),
-        SchemaType::Array(inner) => format!("Array<{}>", schema_to_ts(inner)),
+        SchemaType::Primitive(p) => primitive_type(p),
+        SchemaType::Array(inner) => format!("Array<{}>", schema_type(inner)),
         SchemaType::Object(obj) => {
             let required: HashSet<String> = obj
                 .required
@@ -21,7 +21,7 @@ pub fn schema_to_ts(schema: &SchemaType) -> String {
                 .iter()
                 .map(|(name, value)| {
                     let optional = !required.contains(name);
-                    (name.clone(), schema_to_ts(value), optional)
+                    (name.clone(), schema_type(value), optional)
                 })
                 .collect();
             props.sort_by(|a, b| a.0.cmp(&b.0));
@@ -30,20 +30,20 @@ pub fn schema_to_ts(schema: &SchemaType) -> String {
                 .into_iter()
                 .map(|(name, ty, optional)| {
                     let optional_suffix = if optional { "?" } else { "" };
-                    format!("{}{}: {}", utils::ts_quote(&name), optional_suffix, ty)
+                    format!("{}{}: {}", format::quote(&name), optional_suffix, ty)
                 })
                 .collect();
 
-            utils::type_object(fields)
+            format::object_type(fields)
         }
-        SchemaType::Ref(name) => format!("Schemas[{}]", utils::ts_quote(name)),
+        SchemaType::Ref(name) => format!("Schemas[{}]", format::quote(name)),
         SchemaType::OneOf(variants) | SchemaType::AnyOf(variants) => {
             if variants.is_empty() {
                 "unknown".to_string()
             } else {
                 variants
                     .iter()
-                    .map(schema_to_ts)
+                    .map(schema_type)
                     .map(|v| format!("({v})"))
                     .collect::<Vec<_>>()
                     .join(" | ")
@@ -55,7 +55,7 @@ pub fn schema_to_ts(schema: &SchemaType) -> String {
             } else {
                 variants
                     .iter()
-                    .map(schema_to_ts)
+                    .map(schema_type)
                     .map(|v| format!("({v})"))
                     .collect::<Vec<_>>()
                     .join(" & ")
@@ -66,8 +66,11 @@ pub fn schema_to_ts(schema: &SchemaType) -> String {
 }
 
 /// Converts operation parameters into a typed `params` object grouped by location.
-pub fn params_to_ts(req: &Request) -> Option<String> {
-    let params = req.params.as_ref()?;
+pub fn params_type(req: &Request) -> Option<String> {
+    let params = match req.params.as_ref() {
+        Some(params) => params,
+        None => return None,
+    };
     if params.is_empty() {
         return None;
     }
@@ -89,65 +92,72 @@ pub fn params_to_ts(req: &Request) -> Option<String> {
         let param_fields: Vec<String> = fields
             .into_iter()
             .map(|param| {
-                let optional_suffix = if param.required == Some(true) { "" } else { "?" };
+                let optional_suffix = if param.required == Some(true) {
+                    ""
+                } else {
+                    "?"
+                };
                 let ty = param
                     .schema_type
                     .as_ref()
-                    .map(schema_to_ts)
+                    .map(schema_type)
                     .unwrap_or_else(|| "unknown".to_string());
-                format!("{}{}: {}", utils::ts_quote(&param.name), optional_suffix, ty)
+                format!("{}{}: {}", format::quote(&param.name), optional_suffix, ty)
             })
             .collect();
 
         location_fields.push(format!(
             "{}: {}",
-            utils::ts_quote(&location),
-            utils::type_object(param_fields)
+            format::quote(&location),
+            format::object_type(param_fields)
         ));
     }
 
-    Some(utils::type_object(location_fields))
+    Some(format::object_type(location_fields))
 }
 
 /// Converts operation responses into a typed status-code map.
-pub fn responses_to_ts(req: &Request) -> Option<String> {
-    let responses = req.responses.as_ref()?;
+pub fn responses_type(req: &Request) -> Option<String> {
+    let responses = match req.responses.as_ref() {
+        Some(responses) => responses,
+        None => return None,
+    };
     if responses.is_empty() {
         return None;
     }
 
     let fields: Vec<String> = responses
         .into_iter()
-        .map(|(status, parsed_response)| format!("{status}: {}", parsed_response_to_ts(parsed_response)))
+        .map(|(status, parsed_response)| format!("{status}: {}", response_type(parsed_response)))
         .collect();
 
-    Some(utils::type_object(fields))
+    Some(format::object_type(fields))
 }
 
 /// Converts a parsed response node into a TS type, preferring named schemas.
-pub fn parsed_response_to_ts(parsed_response: &parser::ParsedResponse) -> String {
+pub fn response_type(parsed_response: &parser::ParsedResponse) -> String {
     if let Some(schema_name) = &parsed_response.schema_name {
-        return format!("Schemas[{}]", utils::ts_quote(schema_name));
+        return format!("Schemas[{}]", format::quote(schema_name));
     }
 
-    if let Some(schema_type) = parsed_response.schema_type.as_ref() {
-        return schema_to_ts(schema_type);
+    if let Some(schema) = parsed_response.schema_type.as_ref() {
+        return schema_type(schema);
     }
 
     "never".to_string()
 }
 
 /// Maps primitive schema metadata (including enum/nullable) to TS type syntax.
-fn primitive_to_ts(primitive: &parser::Primitive) -> String {
+fn primitive_type(primitive: &parser::Primitive) -> String {
     let mut base = if let Some(enum_values) = &primitive.enum_values {
         if enum_values.is_empty() {
-            primitive_kind_to_ts(&primitive.kind).to_string()
+            primitive_scalar_type(&primitive.kind).to_string()
         } else {
-            let literals: Vec<String> = enum_values.iter().map(value_to_ts_literal).collect();
+            let literals: Vec<String> = enum_values.iter().map(value_literal).collect();
             literals.join(" | ")
         }
     } else {
-        primitive_kind_to_ts(&primitive.kind).to_string()
+        primitive_scalar_type(&primitive.kind).to_string()
     };
 
     if primitive.nullable == Some(true) {
@@ -158,7 +168,7 @@ fn primitive_to_ts(primitive: &parser::Primitive) -> String {
 }
 
 /// Maps primitive kinds to the closest TypeScript scalar type.
-fn primitive_kind_to_ts(kind: &PrimitiveType) -> &'static str {
+fn primitive_scalar_type(kind: &PrimitiveType) -> &'static str {
     match kind {
         PrimitiveType::String => "string",
         PrimitiveType::Integer => "number",
@@ -168,13 +178,12 @@ fn primitive_kind_to_ts(kind: &PrimitiveType) -> &'static str {
 }
 
 /// Converts JSON enum/default values to TS literal expressions.
-fn value_to_ts_literal(value: &Value) -> String {
+fn value_literal(value: &Value) -> String {
     match value {
-        Value::String(s) => utils::ts_quote(s),
+        Value::String(s) => format::quote(s),
         Value::Number(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Null => "null".to_string(),
         _ => "unknown".to_string(),
     }
 }
-
