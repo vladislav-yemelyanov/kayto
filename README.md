@@ -122,25 +122,6 @@ Dart:
 kayto --lang dart --input "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" --output "generated/schema.dart"
 ```
 
-Helper scripts:
-
-```bash
-./scripts/generate-ts.sh
-./scripts/generate-dart.sh
-```
-
-Scripts support optional args:
-
-```bash
-./scripts/generate-ts.sh [output_path] [input_url]
-./scripts/generate-dart.sh [output_path] [input_url]
-```
-
-Defaults are provided by scripts:
-
-- TS: `generated/schema.ts` + GitHub public OpenAPI JSON
-- Dart: `generated/schema.dart` + GitHub public OpenAPI JSON
-
 ## Generated TypeScript Model
 
 The TS generator writes `schema.ts` with:
